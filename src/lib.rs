@@ -29,6 +29,7 @@ pub struct TcpListenOptions {
 }
 
 #[non_exhaustive]
+#[derive(serde_with::DeserializeFromStr, serde_with::SerializeDisplay)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum UnixChmodVariant {
     Owner,
@@ -62,23 +63,33 @@ impl FromStr for UnixChmodVariant {
     }
 }
 
-#[derive(Debug, Default, clap::Args)]
+#[derive(clap::Args)]
+#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(Debug, Default)]
 pub struct UserOptions {
     #[clap(long)]
+    #[serde(default)]
     pub unix_listen_unlink: bool,
     #[clap(long)]
+    #[serde(default)]
     pub unix_listen_chmod: Option<UnixChmodVariant>,
     #[clap(long)]
+    #[serde(default)]
     pub unix_listen_uid: Option<u32>,
     #[clap(long)]
+    #[serde(default)]
     pub unix_listen_gid: Option<u32>,
     #[clap(long)]
+    #[serde(default)]
     pub sd_accept_ignore_environment: bool,
+
     #[clap(skip)]
+    #[serde(skip)]
     pub tcp_keepalive: Option<socket2::TcpKeepalive>,
 }
 
 #[non_exhaustive]
+#[derive(serde_with::SerializeDisplay, serde_with::DeserializeFromStr)]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ListenerAddress {
     Tcp(SocketAddr),
@@ -442,6 +453,10 @@ impl Listener {
                 return Poll::Ready(Err(e));
             }
         }
+    }
+
+    pub async fn accept(&mut self) -> std::io::Result<(Connection, SomeSocketAddr)> {
+        std::future::poll_fn(|cx|self.poll_accept(cx)).await
     }
 }
 
