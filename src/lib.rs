@@ -4,7 +4,6 @@
 use std::{
     fmt::Display,
     net::SocketAddr,
-    os::fd::RawFd,
     path::PathBuf,
     pin::Pin,
     str::FromStr,
@@ -12,15 +11,22 @@ use std::{
     time::Duration,
 };
 
+
+#[cfg(unix)]
+use std::os::fd::RawFd;
+
 use futures_core::Future;
 use pin_project::pin_project;
 use tokio::{
     io::{AsyncRead, AsyncWrite, Stdin, Stdout},
-    net::{TcpListener, TcpStream, UnixListener, UnixStream},
+    net::{TcpListener, TcpStream},
     sync::oneshot::{channel, Receiver, Sender},
     time::Sleep,
 };
 use tracing::{debug, error, info, trace, warn};
+
+#[cfg(unix)]
+use tokio::net::{UnixListener, UnixStream};
 
 #[non_exhaustive]
 #[derive(Debug, Default)]
@@ -198,6 +204,7 @@ pub struct Listener {
 }
 
 // based on https://docs.rs/sd-notify/0.4.1/src/sd_notify/lib.rs.html#164, but simplified
+#[allow(unused)]
 fn check_env_for_fd(fdnum: i32) -> Option<()> {
     let listen_pid = std::env::var("LISTEN_PID").ok()?;
     let listen_pid: u32 = listen_pid.parse().ok()?;
@@ -232,6 +239,7 @@ impl Listener {
                 nodelay: sopts.nodelay,
                 keepalive: uopts.tcp_keepalive.clone(),
             },
+            #[cfg(unix)]
             ListenerAddress::Path(p) => {
                 if uopts.unix_listen_unlink {
                     if std::fs::remove_file(&p).is_ok() {
@@ -256,6 +264,7 @@ impl Listener {
                 }
                 i
             }
+            #[cfg(any(target_os = "linux", target_os = "android"))]
             ListenerAddress::Abstract(a) => {
                 use std::os::linux::net::SocketAddrExt;
                 let a = std::os::unix::net::SocketAddr::from_abstract_name(a)?;
@@ -270,6 +279,7 @@ impl Listener {
                     token: Some(tx),
                 })
             }
+            #[cfg(unix)]
             ListenerAddress::FromFdTcp(fdnum) => {
                 if !uopts.sd_accept_ignore_environment {
                     if check_env_for_fd(*fdnum).is_none() {
@@ -292,6 +302,7 @@ impl Listener {
                     keepalive: uopts.tcp_keepalive.clone(),
                 }
             }
+            #[cfg(unix)]
             ListenerAddress::FromFdUnix(fdnum) => {
                 if !uopts.sd_accept_ignore_environment {
                     if check_env_for_fd(*fdnum).is_none() {
@@ -308,6 +319,20 @@ impl Listener {
                 let s = unsafe { std::os::unix::net::UnixListener::from_raw_fd(fd) };
                 s.set_nonblocking(true)?;
                 ListenerImpl::Unix(UnixListener::from_std(s)?)
+            }
+            #[cfg(not(unix))]
+            ListenerAddress::Path(..) | ListenerAddress::FromFdUnix(..) | ListenerAddress::FromFdTcp(..) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "This tokio-listener mode is not supported on this platform",
+                ));
+            }
+            #[cfg(not(any(target_os = "linux", target_os = "android")))]
+            ListenerAddress::Abstract(..) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "This tokio-listener mode is not supported on this platform",
+                )); 
             }
         };
         Ok(Listener {
@@ -329,6 +354,7 @@ enum ListenerImpl {
         nodelay: bool,
         keepalive: Option<socket2::TcpKeepalive>,
     },
+    #[cfg(unix)]
     Unix(UnixListener),
     Stdio(StdioListener),
 }
@@ -341,7 +367,7 @@ impl Listener {
             None
         }
     }
-
+    #[cfg(unix)]
     pub fn try_borrow_unix_listener(&self) -> Option<&UnixListener> {
         if let ListenerImpl::Unix(ref x) = self.i {
             Some(x)
@@ -357,7 +383,7 @@ impl Listener {
             Err(self)
         }
     }
-
+    #[cfg(unix)]
     pub fn try_into_unix_listener(self) -> Result<UnixListener, Self> {
         if let ListenerImpl::Unix(x) = self.i {
             Ok(x)
@@ -408,6 +434,7 @@ impl Listener {
                     }
                     Poll::Pending => return Poll::Pending,
                 },
+                #[cfg(unix)]
                 ListenerImpl::Unix(x) => match x.poll_accept(cx) {
                     Poll::Ready(Err(e)) => e,
                     Poll::Ready(Ok((s, a))) => {
@@ -489,6 +516,7 @@ pub struct Connection(#[pin] ConnectionImpl);
 #[pin_project(project = ConnectionImplProj)]
 enum ConnectionImpl {
     Tcp(#[pin] TcpStream),
+    #[cfg(unix)]
     Unix(#[pin] UnixStream),
     Stdio(
         #[pin] tokio::io::Stdin,
@@ -505,6 +533,7 @@ impl Connection {
             Err(self)
         }
     }
+    #[cfg(unix)]
     pub fn try_into_unix(self) -> Result<UnixStream, Self> {
         if let ConnectionImpl::Unix(s) = self.0 {
             Ok(s)
@@ -527,6 +556,7 @@ impl Connection {
             None
         }
     }
+    #[cfg(unix)]
     pub fn try_borrow_unix(&self) -> Option<&UnixStream> {
         if let ConnectionImpl::Unix(ref s) = self.0 {
             Some(s)
@@ -548,6 +578,7 @@ impl From<TcpStream> for Connection {
         Connection(ConnectionImpl::Tcp(s))
     }
 }
+#[cfg(unix)]
 impl From<UnixStream> for Connection {
     fn from(s: UnixStream) -> Self {
         Connection(ConnectionImpl::Unix(s))
@@ -569,6 +600,7 @@ impl AsyncRead for Connection {
         let q: Pin<&mut ConnectionImpl> = self.project().0;
         match q.project() {
             ConnectionImplProj::Tcp(s) => s.poll_read(cx, buf),
+            #[cfg(unix)]
             ConnectionImplProj::Unix(s) => s.poll_read(cx, buf),
             ConnectionImplProj::Stdio(s, _, _) => s.poll_read(cx, buf),
         }
@@ -585,6 +617,7 @@ impl AsyncWrite for Connection {
         let q: Pin<&mut ConnectionImpl> = self.project().0;
         match q.project() {
             ConnectionImplProj::Tcp(s) => s.poll_write(cx, buf),
+            #[cfg(unix)]
             ConnectionImplProj::Unix(s) => s.poll_write(cx, buf),
             ConnectionImplProj::Stdio(_, s, _) => s.poll_write(cx, buf),
         }
@@ -595,6 +628,7 @@ impl AsyncWrite for Connection {
         let q: Pin<&mut ConnectionImpl> = self.project().0;
         match q.project() {
             ConnectionImplProj::Tcp(s) => s.poll_flush(cx),
+            #[cfg(unix)]
             ConnectionImplProj::Unix(s) => s.poll_flush(cx),
             ConnectionImplProj::Stdio(_, s, _) => s.poll_flush(cx),
         }
@@ -608,6 +642,7 @@ impl AsyncWrite for Connection {
         let q: Pin<&mut ConnectionImpl> = self.project().0;
         match q.project() {
             ConnectionImplProj::Tcp(s) => s.poll_shutdown(cx),
+            #[cfg(unix)]
             ConnectionImplProj::Unix(s) => s.poll_shutdown(cx),
             ConnectionImplProj::Stdio(_, s, tx) => match s.poll_shutdown(cx) {
                 Poll::Pending => Poll::Pending,
@@ -634,6 +669,7 @@ impl AsyncWrite for Connection {
         let q: Pin<&mut ConnectionImpl> = self.project().0;
         match q.project() {
             ConnectionImplProj::Tcp(s) => s.poll_write_vectored(cx, bufs),
+            #[cfg(unix)]
             ConnectionImplProj::Unix(s) => s.poll_write_vectored(cx, bufs),
             ConnectionImplProj::Stdio(_, s, _) => s.poll_write_vectored(cx, bufs),
         }
@@ -643,6 +679,7 @@ impl AsyncWrite for Connection {
     fn is_write_vectored(&self) -> bool {
         match &self.0 {
             ConnectionImpl::Tcp(s) => s.is_write_vectored(),
+            #[cfg(unix)]
             ConnectionImpl::Unix(s) => s.is_write_vectored(),
             ConnectionImpl::Stdio(_, s, _) => s.is_write_vectored(),
         }
@@ -653,6 +690,7 @@ impl AsyncWrite for Connection {
 #[non_exhaustive]
 pub enum SomeSocketAddr {
     Tcp(SocketAddr),
+    #[cfg(unix)]
     Unix(tokio::net::unix::SocketAddr),
     Stdio,
 }
@@ -661,6 +699,7 @@ impl Display for SomeSocketAddr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             SomeSocketAddr::Tcp(x) => x.fmt(f),
+            #[cfg(unix)]
             SomeSocketAddr::Unix(_x) => "unix".fmt(f),
             SomeSocketAddr::Stdio => "stdio".fmt(f),
         }
