@@ -63,27 +63,31 @@ impl FromStr for UnixChmodVariant {
     }
 }
 
-#[derive(clap::Args)]
+#[cfg_attr(feature="clap", derive(clap::Args))]
 #[cfg_attr(feature="serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Debug, Default)]
 pub struct UserOptions {
-    #[clap(long)]
+    #[cfg_attr(feature="clap", clap(long))]
     #[cfg_attr(feature="serde", serde(default))]
     pub unix_listen_unlink: bool,
-    #[clap(long)]
+
+    #[cfg_attr(feature="clap", clap(long))]
     #[cfg_attr(feature="serde", serde(default))]
     pub unix_listen_chmod: Option<UnixChmodVariant>,
-    #[clap(long)]
+
+    #[cfg_attr(feature="clap", clap(long))]
     #[cfg_attr(feature="serde", serde(default))]
     pub unix_listen_uid: Option<u32>,
-    #[clap(long)]
+
+    #[cfg_attr(feature="clap", clap(long))]
     #[cfg_attr(feature="serde", serde(default))]
     pub unix_listen_gid: Option<u32>,
-    #[clap(long)]
+
+    #[cfg_attr(feature="clap", clap(long))]
     #[cfg_attr(feature="serde", serde(default))]
     pub sd_accept_ignore_environment: bool,
 
-    #[clap(skip)]
+    #[cfg_attr(feature="clap", clap(skip))]
     #[cfg_attr(feature="serde", serde(skip))]
     pub tcp_keepalive: Option<socket2::TcpKeepalive>,
 }
@@ -663,6 +667,7 @@ impl Display for SomeSocketAddr {
     }
 }
 
+#[cfg(feature="hyper014")]
 mod hyper014 {
     use std::{
         pin::Pin,

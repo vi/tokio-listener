@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { version = "4.3.11", default-features = false, features = ["derive", "std"] }
+clap = { version = "4.3.11", default-features = false, features = ["derive", "std"], optional=true }
 futures-core = "0.3.28"
 hyper = { version = "0.14.27", optional = true, features = ["server"] }
 nix = { version = "0.26.2", default-features = false, features = ["user", "fs"] }
@@ -19,8 +19,9 @@ tokio = { version = "1.29.1", features = ["net", "io-std", "time", "sync"] }
 tracing = "0.1.37"
 
 [features]
-default = ["hyper"]
+default = ["hyper014"]
 serde = ["dep:serde", "serde_with"]
+hyper014 = ["hyper"]
 
 [dev-dependencies]
 anyhow = "1.0.71"
@@ -35,3 +36,13 @@ tracing-subscriber = "0.3.17"
 [[example]]
 name = "serde_echo"
 required-features = ["serde"]
+
+
+[[example]]
+name = "clap_axum"
+required-features = ["clap","hyper014"]
+
+
+[[example]]
+name = "argh_hyper"
+required-features = ["hyper014"]
