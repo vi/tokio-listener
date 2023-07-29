@@ -29,7 +29,7 @@ pub struct TcpListenOptions {
 }
 
 #[non_exhaustive]
-#[derive(serde_with::DeserializeFromStr, serde_with::SerializeDisplay)]
+#[cfg_attr(feature="serde", derive(serde_with::DeserializeFromStr, serde_with::SerializeDisplay))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum UnixChmodVariant {
     Owner,
@@ -64,32 +64,32 @@ impl FromStr for UnixChmodVariant {
 }
 
 #[derive(clap::Args)]
-#[derive(serde::Deserialize, serde::Serialize)]
+#[cfg_attr(feature="serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Debug, Default)]
 pub struct UserOptions {
     #[clap(long)]
-    #[serde(default)]
+    #[cfg_attr(feature="serde", serde(default))]
     pub unix_listen_unlink: bool,
     #[clap(long)]
-    #[serde(default)]
+    #[cfg_attr(feature="serde", serde(default))]
     pub unix_listen_chmod: Option<UnixChmodVariant>,
     #[clap(long)]
-    #[serde(default)]
+    #[cfg_attr(feature="serde", serde(default))]
     pub unix_listen_uid: Option<u32>,
     #[clap(long)]
-    #[serde(default)]
+    #[cfg_attr(feature="serde", serde(default))]
     pub unix_listen_gid: Option<u32>,
     #[clap(long)]
-    #[serde(default)]
+    #[cfg_attr(feature="serde", serde(default))]
     pub sd_accept_ignore_environment: bool,
 
     #[clap(skip)]
-    #[serde(skip)]
+    #[cfg_attr(feature="serde", serde(skip))]
     pub tcp_keepalive: Option<socket2::TcpKeepalive>,
 }
 
 #[non_exhaustive]
-#[derive(serde_with::SerializeDisplay, serde_with::DeserializeFromStr)]
+#[cfg_attr(feature="serde", derive(serde_with::DeserializeFromStr, serde_with::SerializeDisplay))]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ListenerAddress {
     Tcp(SocketAddr),

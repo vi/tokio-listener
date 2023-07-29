@@ -11,8 +11,8 @@ futures-core = "0.3.28"
 hyper = { version = "0.14.27", optional = true, features = ["server"] }
 nix = { version = "0.26.2", default-features = false, features = ["user", "fs"] }
 pin-project = "1.1.2"
-serde = { version = "1.0.171", features = ["derive"] }
-serde_with = "3.0.0"
+serde = { version = "1.0.171", features = ["derive"] , optional = true}
+serde_with = { version = "3.0.0", optional = true}
 socket2 = "0.5.3"
 thiserror = "1.0.43"
 tokio = { version = "1.29.1", features = ["net", "io-std", "time", "sync"] }
@@ -20,6 +20,7 @@ tracing = "0.1.37"
 
 [features]
 default = ["hyper"]
+serde = ["dep:serde", "serde_with"]
 
 [dev-dependencies]
 anyhow = "1.0.71"
@@ -30,3 +31,7 @@ hyper = { version = "0.14.27", features = ["server", "http1"] }
 tokio = { version = "1.29.1", features = ["macros", "rt", "io-util"] }
 toml = "0.7.6"
 tracing-subscriber = "0.3.17"
+
+[[example]]
+name = "serde_echo"
+required-features = ["serde"]
