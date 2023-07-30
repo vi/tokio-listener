@@ -2,6 +2,12 @@
 name = "tokio-listener"
 version = "0.1.0"
 edition = "2021"
+repository = "https://github.com/vi/tokio-listener"
+license = "MIT/Apache-2.0"
+description = "Add flexibility in a way of accepting connections: unix sockets, socket activation, inetd mode to Tokio-based projects."
+categories = ["network-programming", "command-line-interface"]
+keywords = ["tokio","unix", "systemd", "socket-activation", "clap"]
+
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -9,13 +15,16 @@ edition = "2021"
 clap = { version = "4.3.11", default-features = false, features = ["derive", "std"], optional=true }
 futures-core = "0.3.28"
 hyper = { version = "0.14.27", optional = true, features = ["server"] }
-nix = { version = "0.26.2", default-features = false, features = ["user", "fs"] }
 pin-project = "1.1.2"
 serde = { version = "1.0.171", features = ["derive"] , optional = true}
 serde_with = { version = "3.0.0", optional = true}
 socket2 = "0.5.3"
 tokio = { version = "1.29.1", features = ["net", "io-std", "time", "sync"] }
 tracing = "0.1.37"
+
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.26.2", default-features = false, features = ["user", "fs"] }
+
 
 [features]
 default = ["hyper014"]
