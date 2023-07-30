@@ -2,6 +2,9 @@ use clap::Parser;
 
 #[derive(Parser)]
 struct Args {
+    /// Socket address to listen for incoming connections.
+    /// May be TCP socket address like `0.0.0.0:80` or other forms like
+    /// `/path/to/unix/socket`, `@abstract`, `-` or `sd-listen`.
     listener: tokio_listener::ListenerAddress,
 
     #[clap(flatten)]
