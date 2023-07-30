@@ -3,14 +3,10 @@ use clap::Parser;
 #[derive(Parser)]
 /// Demo applicatiopn for tokio-listener
 struct Args {
-    /// Socket address to listen for incoming connections.
-    /// May be TCP socket address like `0.0.0.0:80` or other forms like
-    /// `/path/to/unix/socket`, `@abstract`, `-` or `sd-listen`.
-    listener: tokio_listener::ListenerAddress,
-
     #[clap(flatten)]
-    listener_optiots: tokio_listener::UserOptions,
+    listener: tokio_listener::ListenerAddressPositional,
 
+    /// Line of text to return as a body of incoming requests
     text_to_serve: String,
 }
 
@@ -19,12 +15,7 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
     let args = Args::parse();
 
-    let listener = tokio_listener::Listener::bind(
-        &args.listener,
-        &tokio_listener::SystemOptions::default(),
-        &args.listener_optiots,
-    )
-    .await?;
+    let listener : tokio_listener::Listener = args.listener.bind().await?;
 
     let app = axum::Router::new().route("/", axum::routing::get(|| async { args.text_to_serve }));
 

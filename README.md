@@ -28,11 +28,14 @@ While it is a solid default choice, sometimes more flexibility is desired, espec
 * `argh_hyper` - demonstrages how to use non-clap CLI parser. Also uses `hyper` directly instead of Axum.
 * `serde_echo` - demonstrates that listening configuration can also be specified using e.g. toml file. Is not a web service, but an echo server.
 
+See [crate docs](https://docs.rs/tokio-listener) for API reference and some other examples.
+
 # Limitations
 
 * There is no support of SEQPACKET or DGRAM sockets.
 * It may be slower that just using TcpListener directly, as each send or recv needs to go though a wrapper.
 * Internally it supports setting keepalive timers for TCP sockets, but this is not exposed to CLI or Serde.
+* Specifying non-UTF8-compatible paths for UNIX sockets is not supported.
 
 # Example session
 
@@ -44,7 +47,7 @@ target/debug/examples/clap_axum 127.0.0.1:8080   $'Hello from usual mode\n'
 target/debug/examples/clap_axum ./path_socket    $'Hello from UNIX socket path mode\n'
 target/debug/examples/clap_axum @abstract_socket $'Hello from UNIX socket abstract mode\n'
 systemd-socket-activate          -l 8081 target/debug/examples/clap_axum   sd-listen   $'Hello from pre-listened socket\n'
-systemd-socket-activate --inetd -al 8082 target/debug/examples/clap_axum   -           $'Hello from inetd mode\n'
+systemd-socket-activate --inetd -al 8082 target/debug/examples/clap_axum   inetd       $'Hello from inetd mode\n'
 ```
 
 and this [Caddyfile](https://caddyserver.com/):
@@ -97,24 +100,43 @@ Hello from UNIX socket abstract mode
 ```
 Demo applicatiopn for tokio-listener
 
-Usage: clap_axum [OPTIONS] <LISTENER> <TEXT_TO_SERVE>
+Usage: clap_axum [OPTIONS] <LISTEN_ADDRESS> <TEXT_TO_SERVE>
 
 Arguments:
-  <LISTENER>       Socket address to listen for incoming connections. May be TCP socket address like `0.0.0.0:80` or other forms like `/path/to/unix/socket`, `@abstract`, `-` or `sd-listen`
-  <TEXT_TO_SERVE>  
+  <LISTEN_ADDRESS>
+          Socket address to listen for incoming connections.
+          
+          Various types of addresses are supported:
+          
+          * TCP socket address and port, like 127.0.0.1:8080 or [::]:80
+          
+          * UNIX socket path like /tmp/mysock or Linux abstract address like @abstract
+          
+          * Special keyword "inetd" for serving one connection from stdin/stdout
+          
+          * Special keyword "sd-listen" or "sd-listen-unix" to accept connections from file descriptor 3 (e.g. systemd socket activation)
+
+  <TEXT_TO_SERVE>
+          Line of text to return as a body of incoming requests
 
 Options:
       --unix-listen-unlink
           remove UNIX socket prior to binding to it
+
       --unix-listen-chmod <UNIX_LISTEN_CHMOD>
           change filesystem mode of the newly bound UNIX socket to `owner`, `group` or `everybody`
+
       --unix-listen-uid <UNIX_LISTEN_UID>
           change owner user of the newly bound UNIX socket to this numeric uid
+
       --unix-listen-gid <UNIX_LISTEN_GID>
           change owner group of the newly bound UNIX socket to this numeric uid
+
       --sd-accept-ignore-environment
           ignore environment variables like LISTEN_PID or LISTEN_FDS and unconditionally use file descritor `3` as a socket in sd-listen or sd-listen-unix modes
-  -h, --help
-          Print help
 
+  -h, --help
+          Print help (see a summary with '-h')
 ```
+
+All this can be brought in with just one `#[clap(flatten)] addr: tokio_listener::ListenerAddressPositional`.

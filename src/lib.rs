@@ -17,12 +17,37 @@
 //! while let Ok((conn, addr)) = l.accept().await {
 //!     // ...
 //! }
-//! 
-//! // axum::Server::builder(l).serve(...)
 //! # });
 //! ```
 //! 
-//! See project README for details and more examples.
+//!  There is special integration with `clap`:
+//! 
+//! ```,no_run
+//! # #[cfg(feature="clap")] {
+//! use clap::Parser;
+//! 
+//! #[derive(Parser)]
+//! /// Demo applicatiopn for tokio-listener
+//! struct Args {
+//!     #[clap(flatten)]
+//!     listener: tokio_listener::ListenerAddressPositional,
+//! 
+//!     /// Line of text to return as a body of incoming requests
+//!     text_to_serve: String,
+//! }
+//! 
+//! # tokio_test::block_on(async {
+//! let args = Args::parse();
+//! 
+//! let listener = args.listener.bind().await.unwrap();
+//! 
+//! let app = axum::Router::new().route("/", axum::routing::get(|| async { "Hello, world\n" }));
+//! 
+//! axum::Server::builder(listener).serve(app.into_make_service()).await;
+//! # }) }
+//! ```
+//! 
+//! See project [README](https://github.com/vi/tokio-listener/blob/main/README.md) for details and more examples.
 
 use std::{
     fmt::Display,
@@ -108,27 +133,32 @@ pub struct UserOptions {
     /// remove UNIX socket prior to binding to it
     #[cfg_attr(feature="clap", clap(long))]
     #[cfg_attr(feature="serde", serde(default))]
+    #[cfg_attr(all(feature="clap",not(unix)), clap(hide=true))]
     pub unix_listen_unlink: bool,
 
     /// change filesystem mode of the newly bound UNIX socket to `owner`, `group` or `everybody`
     #[cfg_attr(feature="clap", clap(long))]
+    #[cfg_attr(all(feature="clap",not(unix)), clap(hide=true))]
     #[cfg_attr(feature="serde", serde(default))]
     pub unix_listen_chmod: Option<UnixChmodVariant>,
 
     /// change owner user of the newly bound UNIX socket to this numeric uid
     #[cfg_attr(feature="clap", clap(long))]
     #[cfg_attr(feature="serde", serde(default))]
+    #[cfg_attr(all(feature="clap",not(unix)), clap(hide=true))]
     pub unix_listen_uid: Option<u32>,
 
     /// change owner group of the newly bound UNIX socket to this numeric uid
     #[cfg_attr(feature="clap", clap(long))]
     #[cfg_attr(feature="serde", serde(default))]
+    #[cfg_attr(all(feature="clap",not(unix)), clap(hide=true))]
     pub unix_listen_gid: Option<u32>,
 
     /// ignore environment variables like LISTEN_PID or LISTEN_FDS and unconditionally use
     /// file descritor `3` as a socket in sd-listen or sd-listen-unix modes
     #[cfg_attr(feature="clap", clap(long))]
     #[cfg_attr(feature="serde", serde(default))]
+    #[cfg_attr(all(feature="clap",not(unix)), clap(hide=true))]
     pub sd_accept_ignore_environment: bool,
 
     /// set SO_KEEPALIVE settings for each accepted TCP connection.
@@ -156,7 +186,7 @@ pub struct UserOptions {
 /// let addr : ListenerAddress = "[::]:80".parse().unwrap();
 /// let addr : ListenerAddress = "/path/to/socket".parse().unwrap();
 /// let addr : ListenerAddress = "@abstract_linux_address".parse().unwrap();
-/// let addr : ListenerAddress = "-".parse().unwrap();
+/// let addr : ListenerAddress = "inetd".parse().unwrap();
 /// let addr : ListenerAddress = "sd-listen".parse().unwrap();
 /// let addr : ListenerAddress = "SD_LISTEN".parse().unwrap();
 /// let addr : ListenerAddress = "sd-listen-unix".parse().unwrap();
@@ -177,7 +207,7 @@ pub enum ListenerAddress {
     /// Example: `@server`
     Abstract(String),
     /// "inetd" or "Accept=yes" mode where stdin and stdout (file descriptors 0 and 1) are using together as a socket
-    /// and only one connections is served. Triggered by using `-` as the address.
+    /// and only one connections is served. Triggered by using `inetd` or `stdio` or `-` as the address.
     Inetd,
     /// "Accept=no" mode - using manually specified file descriptor as a pre-created server socket reeady to accept TCP connections.
     /// Triggered by specifying `sd-listen` as address, which sets `3` as file descriptor number
@@ -186,6 +216,122 @@ pub enum ListenerAddress {
     /// Triggered by specifying `sd-listen-unix` as address, which sets `3` as file descriptor number
     FromFdUnix(i32),
 }
+
+#[cfg(feature="clap")]
+mod claptools {
+    use clap::Parser;
+    /// Clap helper to require listener address as a required positional argument `listen_address`,
+    /// for `clap(flatten)`-ing into your primary options struct.
+    /// 
+    /// Also invides a number of additional optional options to adjust the way it listens.
+    /// 
+    /// Provides documentation about how to specify listening addresses into `--help`.
+    /// 
+    /// Example:
+    /// 
+    /// ```,no_run
+    /// # use clap::Parser;
+    /// #[derive(Parser)]
+    /// /// Doc comment here is highly adviced
+    /// struct Args {
+    ///    #[clap(flatten)]
+    ///    listener: tokio_listener::ListenerAddressPositional,
+    /// }
+    /// ```
+    #[derive(Parser)]
+    pub struct ListenerAddressPositional {
+        /// Socket address to listen for incoming connections.  
+        /// 
+        /// Various types of addresses are supported:
+        /// 
+        /// * TCP socket address and port, like 127.0.0.1:8080 or [::]:80
+        /// 
+        /// * UNIX socket path like /tmp/mysock or Linux abstract address like @abstract
+        /// 
+        /// * Special keyword "inetd" for serving one connection from stdin/stdout
+        /// 
+        /// * Special keyword "sd-listen" or "sd-listen-unix" to accept connections from file descriptor 3 (e.g. systemd socket activation)
+        /// 
+        #[cfg_attr(not(any(target_os="linux",target_os="android")), doc="Note that this platform does not support all the modes described above.")]
+        pub listen_address : crate::ListenerAddress,
+
+        #[allow(missing_docs)]
+        #[clap(flatten)]
+        pub listener_options: crate::UserOptions,
+    }
+    
+    /// Clap helper to provide optional listener address  a named argument `--listen-address` or `-l`.
+    /// 
+    /// For `clap(flatten)`-ing into your primary options struct.
+    /// 
+    /// Also invides a number of additional optional options to adjust the way it listens.
+    /// 
+    /// Provides documentation about how to specify listening addresses into `--help`.
+    /// 
+    /// Example:
+    /// 
+    /// ```,no_run
+    /// # use clap::Parser;
+    /// #[derive(Parser)]
+    /// /// Doc comment here is highly adviced
+    /// struct Args {
+    ///    #[clap(flatten)]
+    ///    listener: tokio_listener::ListenerAddressLFlag,
+    /// }
+    /// ```
+    #[derive(Parser)]
+    pub struct ListenerAddressLFlag {
+        /// Socket address to listen for incoming connections.  
+        /// 
+        /// Various types of addresses are supported:
+        /// 
+        /// * TCP socket address and port, like 127.0.0.1:8080 or [::]:80
+        /// 
+        /// * UNIX socket path like /tmp/mysock or Linux abstract address like @abstract
+        /// 
+        /// * Special keyword "inetd" for serving one connection from stdin/stdout
+        /// 
+        /// * Special keyword "sd-listen" or "sd-listen-unix" to accept connections from file descriptor 3 (e.g. systemd socket activation)
+        /// 
+        #[cfg_attr(not(any(target_os="linux",target_os="android")), doc="Note that this platform does not support all the modes described above.")]
+        #[clap(short='l', long="listen-address")]
+        pub listen_address : Option<crate::ListenerAddress>,
+
+        #[allow(missing_docs)]
+        #[clap(flatten)]
+        pub listener_options: crate::UserOptions,
+    }
+
+    impl ListenerAddressPositional {
+        /// Simple function to activate the listener without any extra parameters (just as nodelay, retries or keepalives) based on supplied arguments.
+        pub async fn bind(&self) -> std::io::Result<crate::Listener> {
+            crate::Listener::bind(
+                &self.listen_address,
+                &crate::SystemOptions::default(),
+                &self.listener_options,
+            ).await
+        }
+    }
+    impl ListenerAddressLFlag {
+        /// Simple function to activate the listener (if it is set) 
+        /// without any extra parameters (just as nodelay, retries or keepalives) based on supplied arguments.
+        pub async fn bind(&self) -> Option<std::io::Result<crate::Listener>> {
+            if let Some(addr) = self.listen_address.as_ref() {
+                Some(crate::Listener::bind(
+                    addr,
+                    &crate::SystemOptions::default(),
+                    &self.listener_options,
+                ).await)
+            } else {
+                None
+            }
+            
+        }
+    }
+
+}
+#[cfg(feature="clap")]
+pub use claptools::{ListenerAddressPositional, ListenerAddressLFlag};
 
 const SD_LISTEN_FDS_START: u32 = 3;
 
@@ -197,7 +343,7 @@ impl FromStr for ListenerAddress {
             Ok(ListenerAddress::Path(s.into()))
         } else if s.starts_with('@') {
             Ok(ListenerAddress::Abstract(s[1..].to_owned()))
-        } else if s == "-" {
+        } else if s.eq_ignore_ascii_case("inetd") || s.eq_ignore_ascii_case("stdio") || s == "-" {
             Ok(ListenerAddress::Inetd)
         } else if s.eq_ignore_ascii_case("sd-listen") || s.eq_ignore_ascii_case("sd_listen") {
             Ok(ListenerAddress::FromFdTcp(SD_LISTEN_FDS_START as i32))
@@ -239,7 +385,7 @@ impl Display for ListenerAddress {
             ListenerAddress::Abstract(p) => {
                 write!(f, "@{p}")
             }
-            ListenerAddress::Inetd => "-".fmt(f),
+            ListenerAddress::Inetd => "inetd".fmt(f),
             ListenerAddress::FromFdTcp(fd) => {
                 if *fd == SD_LISTEN_FDS_START as i32 {
                     "sd-listen".fmt(f)

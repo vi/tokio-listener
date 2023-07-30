@@ -46,3 +46,6 @@ required-features = ["clap","hyper014"]
 [[example]]
 name = "argh_hyper"
 required-features = ["hyper014"]
+
+[package.metadata."docs.rs"]
+all-features = true
