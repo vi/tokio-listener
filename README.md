@@ -18,7 +18,7 @@ While it is a solid default choice, sometimes more flexibility is desired, espec
 
 * Compatibility with usual `SocketAddr` - existing invocations would still lead to a usual TCP server socket.
 * Portability - tricky features are not compiled on platforms which do not support them
-* `clap` integration - custom address can be added as a Clap field (due to FromStr impl). Other options can be included by `clap(flatten)`, which also brings short documentation to the CLI help message.
+* `clap` integration - custom address can be added as a Clap field (due to FromStr impl). Other options can be included by `clap(flatten)`, which also brings short documentation to the CLI help message. Alternatively, the whole set of primary address and additional options can be brought in using `ListenerAddressPositional` or `ListenerAddressLFlag` helper types.
 * `serde` intergration - custom address type behaves like a string with respect to Serde. Other options can also be serialized or deserialized.
 * For UNIX path sockets, it supports unlinking, chowning and chmodding the file per user request.
 
