@@ -1,6 +1,7 @@
 use clap::Parser;
 
 #[derive(Parser)]
+/// Demo applicatiopn for tokio-listener
 struct Args {
     /// Socket address to listen for incoming connections.
     /// May be TCP socket address like `0.0.0.0:80` or other forms like

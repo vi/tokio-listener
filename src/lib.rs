@@ -1,5 +1,28 @@
 #![warn(missing_docs)]
-#![doc = include_str!("../README.md")]
+//! Library for abstracting over TCP server sockets, UNIX server sockets, inetd-like mode.
+//! 
+//! [`ListenerAddress`] is like `SocketAddr` and [`Listener`] is like `TcpListener`, but with more flexibility.
+//! 
+//! ```,no_run
+//! # tokio_test::block_on(async {
+//! # use tokio_listener::*;
+//! let addr1 : ListenerAddress = "127.0.0.1:8087".parse().unwrap();
+//! let addr2 : ListenerAddress = "/path/to/socket".parse().unwrap();
+//! let addr3 : ListenerAddress = "@abstract_linux_address".parse().unwrap();
+//! 
+//! let system_options : SystemOptions = Default::default();
+//! let user_options : UserOptions = Default::default();
+//! 
+//! let mut l = Listener::bind(&addr1, &system_options, &user_options).await.unwrap();
+//! while let Ok((conn, addr)) = l.accept().await {
+//!     // ...
+//! }
+//! 
+//! // axum::Server::builder(l).serve(...)
+//! # });
+//! ```
+//! 
+//! See project README for details and more examples.
 
 use std::{
     fmt::Display,
@@ -126,12 +149,26 @@ pub struct UserOptions {
 /// See variatns documentation for FromStr string patterns that are accepted by ListenerAddress parser
 /// 
 /// Remember to copy or link those documentation snippets into your app's documentation.
+/// 
+/// ```
+/// # use tokio_listener::*;
+/// let addr : ListenerAddress = "127.0.0.1:8087".parse().unwrap();
+/// let addr : ListenerAddress = "[::]:80".parse().unwrap();
+/// let addr : ListenerAddress = "/path/to/socket".parse().unwrap();
+/// let addr : ListenerAddress = "@abstract_linux_address".parse().unwrap();
+/// let addr : ListenerAddress = "-".parse().unwrap();
+/// let addr : ListenerAddress = "sd-listen".parse().unwrap();
+/// let addr : ListenerAddress = "SD_LISTEN".parse().unwrap();
+/// let addr : ListenerAddress = "sd-listen-unix".parse().unwrap();
+/// ```
 #[non_exhaustive]
 #[cfg_attr(feature="serde", derive(serde_with::DeserializeFromStr, serde_with::SerializeDisplay))]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ListenerAddress {
     /// Usual server TCP socket. triggered by specifying IPv4 or IPv6 address and port pair.  
     /// Example: `127.0.0.1:8080`.
+    /// 
+    /// Hostnames are not supported.
     Tcp(SocketAddr),
     /// Path-based UNIX socket. Path must begin with `/` or `.`.  
     /// Examples: `/tmp/mysock`, `./mysock`
