@@ -31,9 +31,6 @@
 //! struct Args {
 //!     #[clap(flatten)]
 //!     listener: tokio_listener::ListenerAddressPositional,
-//! 
-//!     /// Line of text to return as a body of incoming requests
-//!     text_to_serve: String,
 //! }
 //! 
 //! # tokio_test::block_on(async {
