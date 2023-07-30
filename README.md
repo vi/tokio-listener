@@ -75,7 +75,7 @@ handle_path /inetd/* {
 }
 ```
 
-you can see that effectively the save service can be accessed in multiple ways:
+you can see that effectively the same service can be accessed in multiple ways:
 
 ```
 $ curl http://127.0.0.1:4000/tcp/

@@ -128,7 +128,7 @@ impl FromStr for UnixChmodVariant {
 /// 
 /// Non-relevant options are ignored by [`Listener::bind`].
 /// 
-/// All options are always available regardless of current platform.
+/// All options are always available regardless of current platform, but may be hidden from --help.
 pub struct UserOptions {
     /// remove UNIX socket prior to binding to it
     #[cfg_attr(feature="clap", clap(long))]
