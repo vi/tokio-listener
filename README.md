@@ -136,7 +136,9 @@ Options:
           ignore environment variables like LISTEN_PID or LISTEN_FDS and unconditionally use file descritor `3` as a socket in sd-listen or sd-listen-unix modes
 
       --tcp-keepalive <TCP_KEEPALIVE>
-          set SO_KEEPALIVE settings for each accepted TCP connection. Note that this version of tokio-listener does not support setting this from config or CLI, you need to set it programatically
+          set SO_KEEPALIVE settings for each accepted TCP connection.
+
+          Value is a colon-separated triplet of time_ms:count:interval_ms, each of which is optional.
 
       --tcp-reuse-port
           Try to set SO_REUSEPORT, so that multiple processes can accept connections from the same port in a round-robin fashion

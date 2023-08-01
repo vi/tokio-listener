@@ -5,6 +5,7 @@ use hyper::{
     service::{make_service_fn, service_fn},
     Body, Request, Response,
 };
+use tokio_listener::TcpKeepaliveParams;
 
 /// Small http service app to demonstrate tokio-listener
 #[derive(FromArgs)]
@@ -34,6 +35,32 @@ struct Args {
     #[argh(switch)]
     sd_accept_ignore_environment: bool,
 
+    /// set SO_KEEPALIVE settings for each accepted TCP connection.
+    /// 
+    /// Value is a colon-separated triplet of time_ms:count:interval_ms, each of which is optional.
+    #[argh(option)]
+    tcp_keepalive : Option<TcpKeepaliveParams>,
+    
+
+    /// try to set SO_REUSEPORT, so that multiple processes can accept connections from the same port in a round-robin fashion
+    #[argh(switch)]
+    tcp_reuse_port : bool,
+
+    /// set socket's SO_RCVBUF value
+    #[argh(option)]
+    recv_buffer_size  : Option<usize>,
+    /// set socket's SO_SNDBUF value
+    #[argh(option)]
+    send_buffer_size : Option<usize>,
+
+    /// set socket's IPV6_V6ONLY to true, to avoid receiving IPv4 connections on IPv6 socket
+    #[argh(switch)]
+    tcp_only_v6: bool,
+
+    /// maximum number of pending unaccepted connections
+    #[argh(option)]
+    tcp_listen_backlog : Option<u32>,
+
     /// text to return in all requests
     #[argh(positional)]
     text: String,
@@ -51,6 +78,12 @@ async fn main() -> anyhow::Result<()> {
     uopts.unix_listen_uid = args.unix_listen_uid;
     uopts.unix_listen_gid = args.unix_listen_gid;
     uopts.sd_accept_ignore_environment = args.sd_accept_ignore_environment;
+    uopts.tcp_keepalive = args.tcp_keepalive;
+    uopts.tcp_reuse_port = args.tcp_reuse_port;
+    uopts.recv_buffer_size = args.recv_buffer_size;
+    uopts.send_buffer_size = args.send_buffer_size;
+    uopts.tcp_only_v6 = args.tcp_only_v6;
+    uopts.tcp_listen_backlog = args.tcp_listen_backlog;
 
     let listener = tokio_listener::Listener::bind(&args.listen_address, &sopts, &uopts).await?;
 

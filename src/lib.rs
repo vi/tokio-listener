@@ -321,8 +321,8 @@ pub struct UserOptions {
 
     #[cfg(feature = "socket_options")]
     /// set SO_KEEPALIVE settings for each accepted TCP connection.
-    /// Note that this version of tokio-listener does not support setting this from config or CLI,
-    /// you need to set it programatically.
+    /// 
+    /// Value is a colon-separated triplet of time_ms:count:interval_ms, each of which is optional.
     #[cfg_attr(feature = "clap", clap(long))]
     #[cfg_attr(feature = "serde", serde(default))]
     pub tcp_keepalive: Option<TcpKeepaliveParams>,
