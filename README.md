@@ -135,8 +135,27 @@ Options:
       --sd-accept-ignore-environment
           ignore environment variables like LISTEN_PID or LISTEN_FDS and unconditionally use file descritor `3` as a socket in sd-listen or sd-listen-unix modes
 
+      --tcp-keepalive <TCP_KEEPALIVE>
+          set SO_KEEPALIVE settings for each accepted TCP connection. Note that this version of tokio-listener does not support setting this from config or CLI, you need to set it programatically
+
+      --tcp-reuse-port
+          Try to set SO_REUSEPORT, so that multiple processes can accept connections from the same port in a round-robin fashion
+
+      --recv-buffer-size <RECV_BUFFER_SIZE>
+          Set socket's SO_RCVBUF value
+
+      --send-buffer-size <SEND_BUFFER_SIZE>
+          Set socket's SO_SNDBUF value
+
+      --tcp-only-v6
+          Set socket's IPV6_V6ONLY to true, to avoid receiving IPv4 connections on IPv6 socket
+
+      --tcp-listen-backlog <TCP_LISTEN_BACKLOG>
+          Maximum number of pending unaccepted connections
+
   -h, --help
           Print help (see a summary with '-h')
+
 ```
 
 All this can be brought in with just one `#[clap(flatten)] addr: tokio_listener::ListenerAddressPositional`.

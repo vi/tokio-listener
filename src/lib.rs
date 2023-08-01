@@ -1,58 +1,61 @@
 #![warn(missing_docs)]
 //! Library for abstracting over TCP server sockets, UNIX server sockets, inetd-like mode.
-//! 
+//!
 //! [`ListenerAddress`] is like `SocketAddr` and [`Listener`] is like `TcpListener`, but with more flexibility.
-//! 
+//!
 //! ```,no_run
 //! # tokio_test::block_on(async {
 //! # use tokio_listener::*;
 //! let addr1 : ListenerAddress = "127.0.0.1:8087".parse().unwrap();
 //! let addr2 : ListenerAddress = "/path/to/socket".parse().unwrap();
 //! let addr3 : ListenerAddress = "@abstract_linux_address".parse().unwrap();
-//! 
+//!
 //! let system_options : SystemOptions = Default::default();
 //! let user_options : UserOptions = Default::default();
-//! 
+//!
 //! let mut l = Listener::bind(&addr1, &system_options, &user_options).await.unwrap();
 //! while let Ok((conn, addr)) = l.accept().await {
 //!     // ...
 //! }
 //! # });
 //! ```
-//! 
+//!
 //!  There is special integration with `clap`:
-//! 
+//!
 //! ```,no_run
 //! # #[cfg(feature="clap")] {
 //! use clap::Parser;
-//! 
+//!
 //! #[derive(Parser)]
 //! /// Demo applicatiopn for tokio-listener
 //! struct Args {
 //!     #[clap(flatten)]
 //!     listener: tokio_listener::ListenerAddressPositional,
 //! }
-//! 
+//!
 //! # tokio_test::block_on(async {
 //! let args = Args::parse();
-//! 
+//!
 //! let listener = args.listener.bind().await.unwrap();
-//! 
+//!
 //! let app = axum::Router::new().route("/", axum::routing::get(|| async { "Hello, world\n" }));
-//! 
+//!
 //! axum::Server::builder(listener).serve(app.into_make_service()).await;
 //! # }) }
 //! ```
-//! 
+//!
 //! See project [README](https://github.com/vi/tokio-listener/blob/main/README.md) for details and more examples.
-//! 
+//!
 //! ## Feature flags
 #![doc = document_features::document_features!()]
 //!
 //! Disabling default features bring tokio-listener close to usual `TcpListener`.
 
-#![cfg_attr(not(feature="sd_listen"), deny(unsafe_code))]
-#![cfg_attr(not(feature="default"), allow(unused_imports,irrefutable_let_patterns,unused_variables))]
+#![cfg_attr(not(feature = "sd_listen"), deny(unsafe_code))]
+#![cfg_attr(
+    not(feature = "default"),
+    allow(unused_imports, irrefutable_let_patterns, unused_variables)
+)]
 
 use std::{
     fmt::Display,
@@ -61,9 +64,8 @@ use std::{
     pin::Pin,
     str::FromStr,
     task::{ready, Context, Poll},
-    time::Duration,
+    time::Duration, ffi::c_int,
 };
-
 
 #[cfg(unix)]
 use std::os::fd::RawFd;
@@ -81,10 +83,13 @@ use tracing::{debug, error, info, trace, warn};
 #[cfg(unix)]
 use tokio::net::{UnixListener, UnixStream};
 
-#[cfg(feature="unix_path_tools")]
+#[cfg(feature = "unix_path_tools")]
 /// Value of `--unix-listen-chmod` option which allows changing DAC file access mode for UNIX path socket
 #[non_exhaustive]
-#[cfg_attr(feature="serde", derive(serde_with::DeserializeFromStr, serde_with::SerializeDisplay))]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde_with::DeserializeFromStr, serde_with::SerializeDisplay)
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum UnixChmodVariant {
     /// Set filesystem mode of the UNIX socket to `u+rw`, allowing access only to one uid
@@ -95,7 +100,7 @@ pub enum UnixChmodVariant {
     Everybody,
 }
 
-#[cfg(feature="unix_path_tools")]
+#[cfg(feature = "unix_path_tools")]
 impl Display for UnixChmodVariant {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -106,7 +111,7 @@ impl Display for UnixChmodVariant {
     }
 }
 
-#[cfg(feature="unix_path_tools")]
+#[cfg(feature = "unix_path_tools")]
 impl FromStr for UnixChmodVariant {
     type Err = &'static str;
 
@@ -123,79 +128,248 @@ impl FromStr for UnixChmodVariant {
     }
 }
 
-#[cfg_attr(feature="clap", derive(clap::Args))]
-#[cfg_attr(feature="serde", derive(serde::Deserialize, serde::Serialize))]
+#[cfg(feature = "socket_options")]
+/// Value of `--tcp-keepalive` option.
+///
+/// When parsed from string, it expects 0 to 3 colon-separated numbers:
+///
+/// * Timeout (in milliseconds)
+/// * Number of failed pings before failing the connection
+/// * Interval of pings (in milliseconds)
+///
+/// Specifying empty string or "" just requests to enable keepalives without configuring parameters.
+///
+/// On unsupported platforms, all or some details of keepalives may be ignored.
+///
+/// Example:
+///
+/// ```
+/// use tokio_listener::TcpKeepaliveParams;
+/// let k1 : TcpKeepaliveParams = "60000:3:5000".parse().unwrap();
+/// let k2 : TcpKeepaliveParams = "60000".parse().unwrap();
+/// let k3 : TcpKeepaliveParams = "".parse().unwrap();
+///
+/// assert_eq!(k1, TcpKeepaliveParams{timeout_ms:Some(60000), count:Some(3), interval_ms:Some(5000)});
+/// ```
+#[cfg_attr(
+    feature = "serde",
+    derive(serde_with::DeserializeFromStr, serde_with::SerializeDisplay)
+)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct TcpKeepaliveParams {
+    /// Amount of time after which TCP keepalive probes will be sent on idle connections.
+    pub timeout_ms: Option<u32>,
+    /// Maximum number of TCP keepalive probes that will be sent before dropping a connection.
+    pub count: Option<u32>,
+    /// Time interval between TCP keepalive probes.
+    pub interval_ms: Option<u32>,
+}
+#[cfg(feature = "socket_options")]
+impl Display for TcpKeepaliveParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(x) = self.timeout_ms {
+            x.fmt(f)?;
+        }
+        ':'.fmt(f)?;
+        if let Some(x) = self.count {
+            x.fmt(f)?;
+        }
+        ':'.fmt(f)?;
+        if let Some(x) = self.interval_ms {
+            x.fmt(f)?;
+        }
+        Ok(())
+    }
+}
+#[cfg(feature = "socket_options")]
+impl FromStr for TcpKeepaliveParams {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let chunks: Vec<&str> = s.split(':').collect();
+        if chunks.len() > 3 {
+            return Err("Too many colon-separated chunks");
+        }
+        let t = chunks.get(0).unwrap_or(&"").trim();
+        let n = chunks.get(1).unwrap_or(&"").trim();
+        let i = chunks.get(2).unwrap_or(&"").trim();
+
+        let mut k = TcpKeepaliveParams::default();
+
+        if !t.is_empty() {
+            k.timeout_ms = Some(
+                t.parse()
+                    .map_err(|_| "failed to parse timeout as a number")?,
+            )
+        }
+        if !n.is_empty() {
+            k.count = Some(n.parse().map_err(|_| "failed to parse count as a number")?)
+        }
+        if !i.is_empty() {
+            k.interval_ms = Some(
+                i.parse()
+                    .map_err(|_| "failed to parse interval as a number")?,
+            )
+        }
+
+        Ok(k)
+    }
+}
+#[cfg(feature = "socket_options")]
+impl TcpKeepaliveParams {
+    /// Attempt to convert values of this struct to socket2 format.
+    ///
+    /// Some fields may be ignored depending on platform.
+    pub fn to_socket2(&self) -> socket2::TcpKeepalive {
+        let mut k = socket2::TcpKeepalive::new();
+
+        if let Some(x) = self.timeout_ms {
+            k = k.with_time(Duration::from_millis(x as u64));
+        }
+
+        #[cfg(any(
+            target_os = "android",
+            target_os = "dragonfly",
+            target_os = "freebsd",
+            target_os = "fuchsia",
+            target_os = "illumos",
+            target_os = "ios",
+            target_os = "linux",
+            target_os = "macos",
+            target_os = "netbsd",
+            target_os = "tvos",
+            target_os = "watchos",
+        ))]
+        if let Some(x) = self.count {
+            k = k.with_retries(x)
+        }
+
+        #[cfg(any(
+            target_os = "android",
+            target_os = "dragonfly",
+            target_os = "freebsd",
+            target_os = "fuchsia",
+            target_os = "illumos",
+            target_os = "ios",
+            target_os = "linux",
+            target_os = "macos",
+            target_os = "netbsd",
+            target_os = "tvos",
+            target_os = "watchos",
+            target_os = "windows",
+        ))]
+        if let Some(x) = self.interval_ms {
+            k = k.with_interval(Duration::from_millis(x as u64));
+        }
+
+        k
+    }
+}
+
+#[cfg_attr(feature = "clap", derive(clap::Args))]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Debug, Default)]
 #[non_exhaustive]
 /// User options that supplement listening address.
-/// 
+///
 /// With `clap` crate feature, this struct can be `clap(flatten)`-ed directly into your primary command line parameters.
 /// With `serde` crate feature, it supportes serialisation and deserialisation.
-/// 
+///
 /// Create instances with `Default::default()` and modify available fields.
-/// 
+///
 /// Non-relevant options are ignored by [`Listener::bind`].
-/// 
+///
 /// All options are always available regardless of current platform, but may be hidden from --help.
-/// 
+///
 /// Disabling related crate features removes them for good though.
 pub struct UserOptions {
-    #[cfg(feature="unix_path_tools")]
+    #[cfg(feature = "unix_path_tools")]
     /// remove UNIX socket prior to binding to it
-    #[cfg_attr(feature="clap", clap(long))]
-    #[cfg_attr(feature="serde", serde(default))]
-    #[cfg_attr(all(feature="clap",not(unix)), clap(hide=true))]
+    #[cfg_attr(feature = "clap", clap(long))]
+    #[cfg_attr(feature = "serde", serde(default))]
+    #[cfg_attr(all(feature = "clap", not(unix)), clap(hide = true))]
     pub unix_listen_unlink: bool,
 
-    #[cfg(feature="unix_path_tools")]
+    #[cfg(feature = "unix_path_tools")]
     /// change filesystem mode of the newly bound UNIX socket to `owner`, `group` or `everybody`
-    #[cfg_attr(feature="clap", clap(long))]
-    #[cfg_attr(all(feature="clap",not(unix)), clap(hide=true))]
-    #[cfg_attr(feature="serde", serde(default))]
+    #[cfg_attr(feature = "clap", clap(long))]
+    #[cfg_attr(all(feature = "clap", not(unix)), clap(hide = true))]
+    #[cfg_attr(feature = "serde", serde(default))]
     pub unix_listen_chmod: Option<UnixChmodVariant>,
 
-    #[cfg(feature="unix_path_tools")]
+    #[cfg(feature = "unix_path_tools")]
     /// change owner user of the newly bound UNIX socket to this numeric uid
-    #[cfg_attr(feature="clap", clap(long))]
-    #[cfg_attr(feature="serde", serde(default))]
-    #[cfg_attr(all(feature="clap",not(unix)), clap(hide=true))]
+    #[cfg_attr(feature = "clap", clap(long))]
+    #[cfg_attr(feature = "serde", serde(default))]
+    #[cfg_attr(all(feature = "clap", not(unix)), clap(hide = true))]
     pub unix_listen_uid: Option<u32>,
 
-    #[cfg(feature="unix_path_tools")]
+    #[cfg(feature = "unix_path_tools")]
     /// change owner group of the newly bound UNIX socket to this numeric uid
-    #[cfg_attr(feature="clap", clap(long))]
-    #[cfg_attr(feature="serde", serde(default))]
-    #[cfg_attr(all(feature="clap",not(unix)), clap(hide=true))]
+    #[cfg_attr(feature = "clap", clap(long))]
+    #[cfg_attr(feature = "serde", serde(default))]
+    #[cfg_attr(all(feature = "clap", not(unix)), clap(hide = true))]
     pub unix_listen_gid: Option<u32>,
 
-    #[cfg(feature="sd_listen")]
+    #[cfg(feature = "sd_listen")]
     /// ignore environment variables like LISTEN_PID or LISTEN_FDS and unconditionally use
     /// file descritor `3` as a socket in sd-listen or sd-listen-unix modes
-    #[cfg_attr(feature="clap", clap(long))]
-    #[cfg_attr(feature="serde", serde(default))]
-    #[cfg_attr(all(feature="clap",not(unix)), clap(hide=true))]
+    #[cfg_attr(feature = "clap", clap(long))]
+    #[cfg_attr(feature = "serde", serde(default))]
+    #[cfg_attr(all(feature = "clap", not(unix)), clap(hide = true))]
     pub sd_accept_ignore_environment: bool,
 
-    #[cfg(feature="socket_options")]
+    #[cfg(feature = "socket_options")]
     /// set SO_KEEPALIVE settings for each accepted TCP connection.
     /// Note that this version of tokio-listener does not support setting this from config or CLI,
     /// you need to set it programatically.
-    #[cfg_attr(feature="clap", clap(skip))]
-    #[cfg_attr(feature="serde", serde(skip))]
-    pub tcp_keepalive: Option<socket2::TcpKeepalive>,
+    #[cfg_attr(feature = "clap", clap(long))]
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub tcp_keepalive: Option<TcpKeepaliveParams>,
+
+    #[cfg(feature = "socket_options")]
+    /// Try to set SO_REUSEPORT, so that multiple processes can accept connections from the same port
+    /// in a round-robin fashion
+    #[cfg_attr(feature = "clap", clap(long))]
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub tcp_reuse_port: bool,
+
+    #[cfg(feature = "socket_options")]
+    /// Set socket's SO_RCVBUF value.
+    #[cfg_attr(feature = "clap", clap(long))]
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub recv_buffer_size: Option<usize>,
+
+    #[cfg(feature = "socket_options")]
+    /// Set socket's SO_SNDBUF value.
+    #[cfg_attr(feature = "clap", clap(long))]
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub send_buffer_size: Option<usize>,
+
+    #[cfg(feature = "socket_options")]
+    /// Set socket's IPV6_V6ONLY to true, to avoid receiving IPv4 connections on IPv6 socket.
+    #[cfg_attr(feature = "clap", clap(long))]
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub tcp_only_v6: bool,
+
+    #[cfg(feature = "socket_options")]
+    /// Maximum number of pending unaccepted connections
+    #[cfg_attr(feature = "clap", clap(long))]
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub tcp_listen_backlog: Option<u32>,
 }
 
 /// Abstraction over socket address that instructs in which way and at what address (if any) [`Listener`]
 /// should listen for incoming stream connections.
-/// 
+///
 /// All address variants are available on all platforms, regardness of actual support in the Listener or enabled crate features.
-/// 
+///
 /// If serde is enabled, it is serialized/deserialized the same as string, same as as in the CLI, using `FromStr`/`Display`.
-/// 
+///
 /// See variants documentation for FromStr string patterns that are accepted by ListenerAddress parser
-/// 
+///
 /// If you are not using clap helper types then remember to copy or link those documentation snippets into your app's documentation.
-/// 
+///
 /// ```
 /// # use tokio_listener::*;
 /// let addr : ListenerAddress = "127.0.0.1:8087".parse().unwrap();
@@ -208,12 +382,15 @@ pub struct UserOptions {
 /// let addr : ListenerAddress = "sd-listen-unix".parse().unwrap();
 /// ```
 #[non_exhaustive]
-#[cfg_attr(feature="serde", derive(serde_with::DeserializeFromStr, serde_with::SerializeDisplay))]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde_with::DeserializeFromStr, serde_with::SerializeDisplay)
+)]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ListenerAddress {
     /// Usual server TCP socket. triggered by specifying IPv4 or IPv6 address and port pair.  
     /// Example: `127.0.0.1:8080`.
-    /// 
+    ///
     /// Hostnames are not supported.
     Tcp(SocketAddr),
     /// Path-based UNIX socket. Path must begin with `/` or `.`.  
@@ -233,18 +410,18 @@ pub enum ListenerAddress {
     FromFdUnix(i32),
 }
 
-#[cfg(feature="clap")]
+#[cfg(feature = "clap")]
 mod claptools {
     use clap::Parser;
     /// Clap helper to require listener address as a required positional argument `listen_address`,
     /// for `clap(flatten)`-ing into your primary options struct.
-    /// 
+    ///
     /// Also invides a number of additional optional options to adjust the way it listens.
-    /// 
+    ///
     /// Provides documentation about how to specify listening addresses into `--help`.
-    /// 
+    ///
     /// Example:
-    /// 
+    ///
     /// ```,no_run
     /// # use clap::Parser;
     /// #[derive(Parser)]
@@ -257,36 +434,42 @@ mod claptools {
     #[derive(Parser)]
     pub struct ListenerAddressPositional {
         /// Socket address to listen for incoming connections.  
-        /// 
+        ///
         /// Various types of addresses are supported:
-        /// 
+        ///
         /// * TCP socket address and port, like 127.0.0.1:8080 or [::]:80
-        /// 
+        ///
         /// * UNIX socket path like /tmp/mysock or Linux abstract address like @abstract
-        /// 
+        ///
         /// * Special keyword "inetd" for serving one connection from stdin/stdout
-        /// 
+        ///
         /// * Special keyword "sd-listen" or "sd-listen-unix" to accept connections from file descriptor 3 (e.g. systemd socket activation)
-        /// 
-        #[cfg_attr(not(any(target_os="linux",target_os="android")), doc="Note that this platform does not support all the modes described above.")]
-        #[cfg_attr(not(feature="user_facing_default"), doc="Note that some features may be disabled by compile-time settings.")]
-        pub listen_address : crate::ListenerAddress,
+        ///
+        #[cfg_attr(
+            not(any(target_os = "linux", target_os = "android")),
+            doc = "Note that this platform does not support all the modes described above."
+        )]
+        #[cfg_attr(
+            not(feature = "user_facing_default"),
+            doc = "Note that some features may be disabled by compile-time settings."
+        )]
+        pub listen_address: crate::ListenerAddress,
 
         #[allow(missing_docs)]
         #[clap(flatten)]
         pub listener_options: crate::UserOptions,
     }
-    
+
     /// Clap helper to provide optional listener address  a named argument `--listen-address` or `-l`.
-    /// 
+    ///
     /// For `clap(flatten)`-ing into your primary options struct.
-    /// 
+    ///
     /// Also invides a number of additional optional options to adjust the way it listens.
-    /// 
+    ///
     /// Provides documentation about how to specify listening addresses into `--help`.
-    /// 
+    ///
     /// Example:
-    /// 
+    ///
     /// ```,no_run
     /// # use clap::Parser;
     /// #[derive(Parser)]
@@ -299,21 +482,27 @@ mod claptools {
     #[derive(Parser)]
     pub struct ListenerAddressLFlag {
         /// Socket address to listen for incoming connections.  
-        /// 
+        ///
         /// Various types of addresses are supported:
-        /// 
+        ///
         /// * TCP socket address and port, like 127.0.0.1:8080 or [::]:80
-        /// 
+        ///
         /// * UNIX socket path like /tmp/mysock or Linux abstract address like @abstract
-        /// 
+        ///
         /// * Special keyword "inetd" for serving one connection from stdin/stdout
-        /// 
+        ///
         /// * Special keyword "sd-listen" or "sd-listen-unix" to accept connections from file descriptor 3 (e.g. systemd socket activation)
-        /// 
-        #[cfg_attr(not(any(target_os="linux",target_os="android")), doc="Note that this platform does not support all the modes described above.")]
-        #[cfg_attr(not(feature="user_facing_default"), doc="Note that some features may be disabled by compile-time settings.")]
-        #[clap(short='l', long="listen-address")]
-        pub listen_address : Option<crate::ListenerAddress>,
+        ///
+        #[cfg_attr(
+            not(any(target_os = "linux", target_os = "android")),
+            doc = "Note that this platform does not support all the modes described above."
+        )]
+        #[cfg_attr(
+            not(feature = "user_facing_default"),
+            doc = "Note that some features may be disabled by compile-time settings."
+        )]
+        #[clap(short = 'l', long = "listen-address")]
+        pub listen_address: Option<crate::ListenerAddress>,
 
         #[allow(missing_docs)]
         #[clap(flatten)]
@@ -327,29 +516,31 @@ mod claptools {
                 &self.listen_address,
                 &crate::SystemOptions::default(),
                 &self.listener_options,
-            ).await
+            )
+            .await
         }
     }
     impl ListenerAddressLFlag {
-        /// Simple function to activate the listener (if it is set) 
+        /// Simple function to activate the listener (if it is set)
         /// without any extra parameters (just as nodelay, retries or keepalives) based on supplied arguments.
         pub async fn bind(&self) -> Option<std::io::Result<crate::Listener>> {
             if let Some(addr) = self.listen_address.as_ref() {
-                Some(crate::Listener::bind(
-                    addr,
-                    &crate::SystemOptions::default(),
-                    &self.listener_options,
-                ).await)
+                Some(
+                    crate::Listener::bind(
+                        addr,
+                        &crate::SystemOptions::default(),
+                        &self.listener_options,
+                    )
+                    .await,
+                )
             } else {
                 None
             }
-            
         }
     }
-
 }
-#[cfg(feature="clap")]
-pub use claptools::{ListenerAddressPositional, ListenerAddressLFlag};
+#[cfg(feature = "clap")]
+pub use claptools::{ListenerAddressLFlag, ListenerAddressPositional};
 
 const SD_LISTEN_FDS_START: u32 = 3;
 
@@ -429,15 +620,15 @@ pub struct SystemOptions {
     /// Wait for one second and retry if accepting connections fail (for reasons unrelated to the connections themselves),
     /// assuming it is file descriptor number exhaustion, which may be temporary
     pub sleep_on_errors: bool,
-    
+
     /// Set TCP_NODELAY on accepted TCP sockets. Does not affect other socket types.
-    /// 
+    ///
     /// This field is available even without `socket_options` crate feature.
     pub nodelay: bool,
 }
 
 /// Configured TCP. AF_UNIX or other stream socket acceptor.
-/// 
+///
 /// Based on extended hyper 0.14's `AddrIncoming` code.
 pub struct Listener {
     i: ListenerImpl,
@@ -445,8 +636,7 @@ pub struct Listener {
     timeout: Option<Pin<Box<Sleep>>>,
 }
 
-
-#[cfg(feature="sd_listen")]
+#[cfg(feature = "sd_listen")]
 // based on https://docs.rs/sd-notify/0.4.1/src/sd_notify/lib.rs.html#164, but simplified
 #[allow(unused)]
 fn check_env_for_fd(fdnum: i32) -> Option<()> {
@@ -473,15 +663,15 @@ fn check_env_for_fd(fdnum: i32) -> Option<()> {
 
 impl Listener {
     /// Creates listener corresponding specified to tokio-listener address and options.
-    /// 
+    ///
     /// * For TCP addresses it tries to behave close to hyper 0.14's listener
     /// * For UNIX path addresses, it can unlink or change permissions of the socket based on user options
     /// * For raw fd sockets, it checkes `LISTEN_FD` and `LISTEN_PID` environment variables by default, unless opted out in user options
     /// * For inetd it accepts only one connection. However, reporting of the error of
     /// inability to accept the second connection is delayed until the first connection finishes, to avoid premature exit from process.
-    /// 
+    ///
     /// With `hyper014` crate feature (default), the listener can be directly used as argument for `Server::builder`.
-    /// 
+    ///
     /// Binding may fail due to unsupported address type, e.g. if trying to use UNIX addresses on Windows or abstract-namespaces sockets on Mac.
     pub async fn bind(
         addr: &ListenerAddress,
@@ -489,22 +679,55 @@ impl Listener {
         uopts: &UserOptions,
     ) -> std::io::Result<Self> {
         let i: ListenerImpl = match addr {
-            ListenerAddress::Tcp(a) => ListenerImpl::Tcp {
-                s: TcpListener::bind(a).await?,
-                nodelay: sopts.nodelay,
+            ListenerAddress::Tcp(a) => {
+                #[cfg(not(feature="socket_options"))]
+                let s = TcpListener::bind(a).await?;
                 #[cfg(feature="socket_options")]
-                keepalive: uopts.tcp_keepalive.clone(),
-            },
-            #[cfg(all(unix,feature="unix"))]
+                let s = if uopts.tcp_only_v6 || uopts.tcp_reuse_port || uopts.tcp_listen_backlog.is_some() {
+                    let s = socket2::Socket::new(socket2::Domain::for_address(*a), socket2::Type::STREAM, None)?;
+                    if uopts.tcp_only_v6 {
+                        s.set_only_v6(true)?;
+                    }
+                    if uopts.tcp_reuse_port {
+                        s.set_reuse_port(true)?;
+                    }
+                    s.bind(&socket2::SockAddr::from(*a))?;
+                    s.listen(uopts.tcp_listen_backlog.unwrap_or(1024) as c_int)?;
+                    s.set_nonblocking(true)?;
+                    TcpListener::from_std(std::net::TcpListener::from(s))?
+                } else {
+                    TcpListener::bind(a).await?
+                };
+                ListenerImpl::Tcp {
+                s,
+                nodelay: sopts.nodelay,
+                #[cfg(feature = "socket_options")]
+                keepalive: uopts
+                    .tcp_keepalive
+                    .as_ref()
+                    .map(TcpKeepaliveParams::to_socket2),
+                #[cfg(feature = "socket_options")]
+                recv_buffer_size: uopts.recv_buffer_size,
+                #[cfg(feature = "socket_options")]
+                send_buffer_size: uopts.send_buffer_size,
+            }},
+            #[cfg(all(unix, feature = "unix"))]
             ListenerAddress::Path(p) => {
-                #[cfg(feature="unix_path_tools")]
+                #[cfg(feature = "unix_path_tools")]
                 if uopts.unix_listen_unlink {
                     if std::fs::remove_file(&p).is_ok() {
                         debug!(file=?p, "removed UNIX socket before listening")
                     }
                 }
-                let i = ListenerImpl::Unix(UnixListener::bind(&p)?);
-                #[cfg(feature="unix_path_tools")] {
+                let i = ListenerImpl::Unix {
+                    s: UnixListener::bind(&p)?,
+                    #[cfg(feature = "socket_options")]
+                    recv_buffer_size: uopts.recv_buffer_size,
+                    #[cfg(feature = "socket_options")]
+                    send_buffer_size: uopts.send_buffer_size,
+                };
+                #[cfg(feature = "unix_path_tools")]
+                {
                     if let Some(chmod) = uopts.unix_listen_chmod {
                         let mode = match chmod {
                             UnixChmodVariant::Owner => 0o006,
@@ -523,15 +746,21 @@ impl Listener {
                 }
                 i
             }
-            #[cfg(all(feature="unix",any(target_os = "linux", target_os = "android")))]
+            #[cfg(all(feature = "unix", any(target_os = "linux", target_os = "android")))]
             ListenerAddress::Abstract(a) => {
                 use std::os::linux::net::SocketAddrExt;
                 let a = std::os::unix::net::SocketAddr::from_abstract_name(a)?;
                 let s = std::os::unix::net::UnixListener::bind_addr(&a)?;
                 s.set_nonblocking(true)?;
-                ListenerImpl::Unix(UnixListener::from_std(s)?)
+                ListenerImpl::Unix {
+                    s: UnixListener::from_std(s)?,
+                    #[cfg(feature = "socket_options")]
+                    recv_buffer_size: uopts.recv_buffer_size,
+                    #[cfg(feature = "socket_options")]
+                    send_buffer_size: uopts.send_buffer_size,
+                }
             }
-            #[cfg(feature="inetd")]
+            #[cfg(feature = "inetd")]
             ListenerAddress::Inetd => {
                 let (tx, rx) = channel();
                 ListenerImpl::Stdio(StdioListener {
@@ -539,7 +768,7 @@ impl Listener {
                     token: Some(tx),
                 })
             }
-            #[cfg(all(feature="sd_listen",unix))]
+            #[cfg(all(feature = "sd_listen", unix))]
             ListenerAddress::FromFdTcp(fdnum) => {
                 if !uopts.sd_accept_ignore_environment {
                     if check_env_for_fd(*fdnum).is_none() {
@@ -559,11 +788,18 @@ impl Listener {
                 ListenerImpl::Tcp {
                     s: TcpListener::from_std(s)?,
                     nodelay: sopts.nodelay,
-                    #[cfg(feature="socket_options")]
-                    keepalive: uopts.tcp_keepalive.clone(),
+                    #[cfg(feature = "socket_options")]
+                    keepalive: uopts
+                        .tcp_keepalive
+                        .as_ref()
+                        .map(TcpKeepaliveParams::to_socket2),
+                    #[cfg(feature = "socket_options")]
+                    recv_buffer_size: uopts.recv_buffer_size,
+                    #[cfg(feature = "socket_options")]
+                    send_buffer_size: uopts.send_buffer_size,
                 }
             }
-            #[cfg(all(feature="sd_listen",feature="unix",unix))]
+            #[cfg(all(feature = "sd_listen", feature = "unix", unix))]
             ListenerAddress::FromFdUnix(fdnum) => {
                 if !uopts.sd_accept_ignore_environment {
                     if check_env_for_fd(*fdnum).is_none() {
@@ -579,14 +815,21 @@ impl Listener {
                 // Besides checking systemd's environment variables, we can't do much to prevent misuse anyway.
                 let s = unsafe { std::os::unix::net::UnixListener::from_raw_fd(fd) };
                 s.set_nonblocking(true)?;
-                ListenerImpl::Unix(UnixListener::from_std(s)?)
+                ListenerImpl::Unix {
+                    s: UnixListener::from_std(s)?,
+                    #[cfg(feature = "socket_options")]
+                    send_buffer_size: uopts.send_buffer_size,
+
+                    #[cfg(feature = "socket_options")]
+                    recv_buffer_size: uopts.recv_buffer_size,
+                }
             }
             #[allow(unreachable_patterns)]
             _ => {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::Other,
                     "This tokio-listener mode is not supported on this platform or is disabled during compilation",
-                )); 
+                ));
             }
         };
         Ok(Listener {
@@ -597,7 +840,7 @@ impl Listener {
     }
 }
 
-#[cfg(feature="inetd")]
+#[cfg(feature = "inetd")]
 struct StdioListener {
     rx: Receiver<()>,
     token: Option<Sender<()>>,
@@ -607,12 +850,22 @@ enum ListenerImpl {
     Tcp {
         s: TcpListener,
         nodelay: bool,
-        #[cfg(feature="socket_options")]
+        #[cfg(feature = "socket_options")]
         keepalive: Option<socket2::TcpKeepalive>,
+        #[cfg(feature = "socket_options")]
+        recv_buffer_size: Option<usize>,
+        #[cfg(feature = "socket_options")]
+        send_buffer_size: Option<usize>,
     },
-    #[cfg(all(feature="unix",unix))]
-    Unix(UnixListener),
-    #[cfg(feature="inetd")]
+    #[cfg(all(feature = "unix", unix))]
+    Unix {
+        s: UnixListener,
+        #[cfg(feature = "socket_options")]
+        recv_buffer_size: Option<usize>,
+        #[cfg(feature = "socket_options")]
+        send_buffer_size: Option<usize>,
+    },
+    #[cfg(feature = "inetd")]
     Stdio(StdioListener),
 }
 
@@ -626,9 +879,9 @@ impl Listener {
         }
     }
     #[allow(missing_docs)]
-    #[cfg(all(feature="unix",unix))]
+    #[cfg(all(feature = "unix", unix))]
     pub fn try_borrow_unix_listener(&self) -> Option<&UnixListener> {
-        if let ListenerImpl::Unix(ref x) = self.i {
+        if let ListenerImpl::Unix { s: ref x, .. } = self.i {
             Some(x)
         } else {
             None
@@ -644,9 +897,9 @@ impl Listener {
         }
     }
     #[allow(missing_docs)]
-    #[cfg(all(feature="unix",unix))]
+    #[cfg(all(feature = "unix", unix))]
     pub fn try_into_unix_listener(self) -> Result<UnixListener, Self> {
-        if let ListenerImpl::Unix(x) = self.i {
+        if let ListenerImpl::Unix { s: x, .. } = self.i {
             Ok(x)
         } else {
             Err(self)
@@ -656,7 +909,7 @@ impl Listener {
     /// This listener is in inetd (stdin/stdout) more and the sole connection is already accepted
     #[allow(unreachable_code)]
     pub fn no_more_connections(&self) -> bool {
-        #[cfg(feature="inetd")]
+        #[cfg(feature = "inetd")]
         return if let ListenerImpl::Stdio(ref x) = self.i {
             x.token.is_none()
         } else {
@@ -680,8 +933,12 @@ impl Listener {
                 ListenerImpl::Tcp {
                     s,
                     nodelay,
-                    #[cfg(feature="socket_options")]
+                    #[cfg(feature = "socket_options")]
                     keepalive,
+                    #[cfg(feature = "socket_options")]
+                    recv_buffer_size,
+                    #[cfg(feature = "socket_options")]
+                    send_buffer_size,
                 } => match s.poll_accept(cx) {
                     Poll::Ready(Err(e)) => e,
                     Poll::Ready(Ok((c, a))) => {
@@ -689,10 +946,19 @@ impl Listener {
                         if *nodelay {
                             c.set_nodelay(true)?;
                         }
-                        #[cfg(feature="socket_options")] {
+                        #[cfg(feature = "socket_options")]
+                        {
                             if let Some(ka) = keepalive {
                                 let sock_ref = socket2::SockRef::from(&c);
                                 sock_ref.set_tcp_keepalive(ka)?;
+                            }
+                            if let Some(n) = recv_buffer_size {
+                                let sock_ref = socket2::SockRef::from(&c);
+                                sock_ref.set_recv_buffer_size(*n)?;
+                            }
+                            if let Some(n) = send_buffer_size {
+                                let sock_ref = socket2::SockRef::from(&c);
+                                sock_ref.set_send_buffer_size(*n)?;
                             }
                         }
                         return Poll::Ready(Ok((
@@ -702,13 +968,27 @@ impl Listener {
                     }
                     Poll::Pending => return Poll::Pending,
                 },
-                #[cfg(all(feature="unix",unix))]
-                ListenerImpl::Unix(x) => match x.poll_accept(cx) {
+                #[cfg(all(feature = "unix", unix))]
+                ListenerImpl::Unix {
+                    s: x,
+                    #[cfg(feature = "socket_options")]
+                    recv_buffer_size,
+                    #[cfg(feature = "socket_options")]
+                    send_buffer_size,
+                } => match x.poll_accept(cx) {
                     Poll::Ready(Err(e)) => e,
                     Poll::Ready(Ok((c, a))) => {
                         debug!(r#type = "unix", "incoming connection");
-                        #[cfg(feature="socket_options")] {
-                            // ...
+                        #[cfg(feature = "socket_options")]
+                        {
+                            if let Some(n) = recv_buffer_size {
+                                let sock_ref = socket2::SockRef::from(&c);
+                                sock_ref.set_recv_buffer_size(*n)?;
+                            }
+                            if let Some(n) = send_buffer_size {
+                                let sock_ref = socket2::SockRef::from(&c);
+                                sock_ref.set_send_buffer_size(*n)?;
+                            }
                         }
                         return Poll::Ready(Ok((
                             Connection(ConnectionImpl::Unix(c)),
@@ -717,7 +997,7 @@ impl Listener {
                     }
                     Poll::Pending => return Poll::Pending,
                 },
-                #[cfg(feature="inetd")]
+                #[cfg(feature = "inetd")]
                 ListenerImpl::Stdio(x) => {
                     match x.token.take() {
                         Some(tx) => {
@@ -760,7 +1040,7 @@ impl Listener {
 
     /// See main [`Listener::bind`] documentation for specifics of how it accepts conenctions
     pub async fn accept(&mut self) -> std::io::Result<(Connection, SomeSocketAddr)> {
-        std::future::poll_fn(|cx|self.poll_accept(cx)).await
+        std::future::poll_fn(|cx| self.poll_accept(cx)).await
     }
 }
 
@@ -783,7 +1063,7 @@ fn is_connection_error(e: &std::io::Error) -> bool {
 }
 
 /// Accepted connection, which can be a TCP socket, AF_UNIX stream socket or a stdin/stdout pair.
-/// 
+///
 /// Although inner enum is private, you can use methods or `From` impls to convert this to/from usual Tokio types.
 #[pin_project]
 pub struct Connection(#[pin] ConnectionImpl);
@@ -792,9 +1072,9 @@ pub struct Connection(#[pin] ConnectionImpl);
 #[pin_project(project = ConnectionImplProj)]
 enum ConnectionImpl {
     Tcp(#[pin] TcpStream),
-    #[cfg(all(feature="unix",unix))]
+    #[cfg(all(feature = "unix", unix))]
     Unix(#[pin] UnixStream),
-    #[cfg(feature="inetd")]
+    #[cfg(feature = "inetd")]
     Stdio(
         #[pin] tokio::io::Stdin,
         #[pin] tokio::io::Stdout,
@@ -812,7 +1092,7 @@ impl Connection {
         }
     }
     #[allow(missing_docs)]
-    #[cfg(all(feature="unix",unix))]
+    #[cfg(all(feature = "unix", unix))]
     pub fn try_into_unix(self) -> Result<UnixStream, Self> {
         if let ConnectionImpl::Unix(s) = self.0 {
             Ok(s)
@@ -820,7 +1100,7 @@ impl Connection {
             Err(self)
         }
     }
-    #[cfg(feature="inetd")]
+    #[cfg(feature = "inetd")]
     #[allow(missing_docs)]
     pub fn try_into_stdio(self) -> Result<(Stdin, Stdout, Option<Sender<()>>), Self> {
         if let ConnectionImpl::Stdio(i, o, f) = self.0 {
@@ -838,7 +1118,7 @@ impl Connection {
             None
         }
     }
-    #[cfg(all(feature="unix",unix))]
+    #[cfg(all(feature = "unix", unix))]
     #[allow(missing_docs)]
     pub fn try_borrow_unix(&self) -> Option<&UnixStream> {
         if let ConnectionImpl::Unix(ref s) = self.0 {
@@ -847,7 +1127,7 @@ impl Connection {
             None
         }
     }
-    #[cfg(feature="inetd")]
+    #[cfg(feature = "inetd")]
     #[allow(missing_docs)]
     pub fn try_borrow_stdio(&self) -> Option<(&Stdin, &Stdout)> {
         if let ConnectionImpl::Stdio(ref i, ref o, ..) = self.0 {
@@ -863,13 +1143,13 @@ impl From<TcpStream> for Connection {
         Connection(ConnectionImpl::Tcp(s))
     }
 }
-#[cfg(all(feature="unix",unix))]
+#[cfg(all(feature = "unix", unix))]
 impl From<UnixStream> for Connection {
     fn from(s: UnixStream) -> Self {
         Connection(ConnectionImpl::Unix(s))
     }
 }
-#[cfg(feature="inetd")]
+#[cfg(feature = "inetd")]
 impl From<(Stdin, Stdout, Option<Sender<()>>)> for Connection {
     fn from(s: (Stdin, Stdout, Option<Sender<()>>)) -> Self {
         Connection(ConnectionImpl::Stdio(s.0, s.1, s.2))
@@ -886,9 +1166,9 @@ impl AsyncRead for Connection {
         let q: Pin<&mut ConnectionImpl> = self.project().0;
         match q.project() {
             ConnectionImplProj::Tcp(s) => s.poll_read(cx, buf),
-            #[cfg(all(feature="unix",unix))]
+            #[cfg(all(feature = "unix", unix))]
             ConnectionImplProj::Unix(s) => s.poll_read(cx, buf),
-            #[cfg(feature="inetd")]
+            #[cfg(feature = "inetd")]
             ConnectionImplProj::Stdio(s, _, _) => s.poll_read(cx, buf),
         }
     }
@@ -904,9 +1184,9 @@ impl AsyncWrite for Connection {
         let q: Pin<&mut ConnectionImpl> = self.project().0;
         match q.project() {
             ConnectionImplProj::Tcp(s) => s.poll_write(cx, buf),
-            #[cfg(all(feature="unix",unix))]
+            #[cfg(all(feature = "unix", unix))]
             ConnectionImplProj::Unix(s) => s.poll_write(cx, buf),
-            #[cfg(feature="inetd")]
+            #[cfg(feature = "inetd")]
             ConnectionImplProj::Stdio(_, s, _) => s.poll_write(cx, buf),
         }
     }
@@ -916,9 +1196,9 @@ impl AsyncWrite for Connection {
         let q: Pin<&mut ConnectionImpl> = self.project().0;
         match q.project() {
             ConnectionImplProj::Tcp(s) => s.poll_flush(cx),
-            #[cfg(all(feature="unix",unix))]
+            #[cfg(all(feature = "unix", unix))]
             ConnectionImplProj::Unix(s) => s.poll_flush(cx),
-            #[cfg(feature="inetd")]
+            #[cfg(feature = "inetd")]
             ConnectionImplProj::Stdio(_, s, _) => s.poll_flush(cx),
         }
     }
@@ -931,9 +1211,9 @@ impl AsyncWrite for Connection {
         let q: Pin<&mut ConnectionImpl> = self.project().0;
         match q.project() {
             ConnectionImplProj::Tcp(s) => s.poll_shutdown(cx),
-            #[cfg(all(feature="unix",unix))]
+            #[cfg(all(feature = "unix", unix))]
             ConnectionImplProj::Unix(s) => s.poll_shutdown(cx),
-            #[cfg(feature="inetd")]
+            #[cfg(feature = "inetd")]
             ConnectionImplProj::Stdio(_, s, tx) => match s.poll_shutdown(cx) {
                 Poll::Pending => Poll::Pending,
                 Poll::Ready(ret) => {
@@ -959,9 +1239,9 @@ impl AsyncWrite for Connection {
         let q: Pin<&mut ConnectionImpl> = self.project().0;
         match q.project() {
             ConnectionImplProj::Tcp(s) => s.poll_write_vectored(cx, bufs),
-            #[cfg(all(feature="unix",unix))]
+            #[cfg(all(feature = "unix", unix))]
             ConnectionImplProj::Unix(s) => s.poll_write_vectored(cx, bufs),
-            #[cfg(feature="inetd")]
+            #[cfg(feature = "inetd")]
             ConnectionImplProj::Stdio(_, s, _) => s.poll_write_vectored(cx, bufs),
         }
     }
@@ -970,9 +1250,9 @@ impl AsyncWrite for Connection {
     fn is_write_vectored(&self) -> bool {
         match &self.0 {
             ConnectionImpl::Tcp(s) => s.is_write_vectored(),
-            #[cfg(all(feature="unix",unix))]
+            #[cfg(all(feature = "unix", unix))]
             ConnectionImpl::Unix(s) => s.is_write_vectored(),
-            #[cfg(feature="inetd")]
+            #[cfg(feature = "inetd")]
             ConnectionImpl::Stdio(_, s, _) => s.is_write_vectored(),
         }
     }
@@ -985,9 +1265,9 @@ impl AsyncWrite for Connection {
 #[allow(missing_docs)]
 pub enum SomeSocketAddr {
     Tcp(SocketAddr),
-    #[cfg(all(feature="unix",unix))]
+    #[cfg(all(feature = "unix", unix))]
     Unix(tokio::net::unix::SocketAddr),
-    #[cfg(feature="inetd")]
+    #[cfg(feature = "inetd")]
     Stdio,
 }
 
@@ -995,15 +1275,15 @@ impl Display for SomeSocketAddr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             SomeSocketAddr::Tcp(x) => x.fmt(f),
-            #[cfg(all(feature="unix",unix))]
+            #[cfg(all(feature = "unix", unix))]
             SomeSocketAddr::Unix(_x) => "unix".fmt(f),
-            #[cfg(feature="inetd")]
+            #[cfg(feature = "inetd")]
             SomeSocketAddr::Stdio => "stdio".fmt(f),
         }
     }
 }
 
-#[cfg(feature="hyper014")]
+#[cfg(feature = "hyper014")]
 mod hyper014 {
     use std::{
         pin::Pin,
@@ -1022,7 +1302,6 @@ mod hyper014 {
             self: std::pin::Pin<&mut Self>,
             cx: &mut task::Context<'_>,
         ) -> Poll<Option<Result<Self::Conn, Self::Error>>> {
-           
             let nmc = self.no_more_connections();
             match crate::Listener::poll_accept(Pin::<_>::into_inner(self), cx) {
                 Poll::Ready(Ok((s, _a))) => Poll::Ready(Some(Ok(s))),
@@ -1031,7 +1310,7 @@ mod hyper014 {
                         return Poll::Ready(None);
                     }
                     Poll::Ready(Some(Err(e)))
-                },
+                }
                 Poll::Pending => Poll::Pending,
             }
         }

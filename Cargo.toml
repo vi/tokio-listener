@@ -22,7 +22,7 @@ hyper = { version = "0.14.27", optional = true, features = ["server"] }
 pin-project = "1.1.2"
 serde = { version = "1.0.171", features = ["derive"] , optional = true}
 serde_with = { version = "3.0.0", optional = true}
-socket2 = {version="0.5.3", optional=true}
+socket2 = {version="0.5.3", optional=true, features=["all"]}
 tokio = { version = "1.29.1", features = ["net", "io-std", "time", "sync"] }
 tracing = "0.1.37"
 
@@ -70,7 +70,7 @@ tracing-subscriber = "0.3.17"
 
 [[example]]
 name = "serde_echo"
-required-features = ["serde"]
+required-features = ["serde", "sd_listen"]
 
 
 [[example]]
@@ -80,7 +80,7 @@ required-features = ["clap","hyper014"]
 
 [[example]]
 name = "argh_hyper"
-required-features = ["hyper014"]
+required-features = ["hyper014", "user_facing_default"]
 
 [package.metadata."docs.rs"]
 all-features = true
