@@ -12,24 +12,50 @@ keywords = ["tokio","unix", "systemd", "socket-activation", "clap"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+
+## Enable `derive(Parser)` for [`UserOptions`] and other Clap helpers
 clap = { version = "4.3.11", default-features = false, features = ["derive", "std"], optional=true }
+
+document-features = "0.2.7"
 futures-core = "0.3.28"
 hyper = { version = "0.14.27", optional = true, features = ["server"] }
 pin-project = "1.1.2"
 serde = { version = "1.0.171", features = ["derive"] , optional = true}
 serde_with = { version = "3.0.0", optional = true}
-socket2 = "0.5.3"
+socket2 = {version="0.5.3", optional=true}
 tokio = { version = "1.29.1", features = ["net", "io-std", "time", "sync"] }
 tracing = "0.1.37"
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.26.2", default-features = false, features = ["user", "fs"] }
+nix = { version = "0.26.2", default-features = false, features = ["user", "fs"], optional=true }
 
 
 [features]
-default = ["hyper014"]
+default = ["hyper014", "user_facing_default"]
+
+## Subset of default features that add features supposed to be accessed by end user
+user_facing_default = ["inetd", "unix", "unix_path_tools", "sd_listen", "socket_options"]
+
+## Enable `serde::Serialize` and `serde::Deserialize` implementations for [`UserOptions`] and [`ListenerAddress`] and some other types.
 serde = ["dep:serde", "serde_with"]
+
+## Enable `hyper(v0.14)::server::accept::Accept` implementation for [`Listener`]
 hyper014 = ["hyper"]
+
+## Enable inetd (stdin/stdout) mode
+inetd = []
+
+## Enable UNIX socket mode
+unix = []
+
+## Enable tools such as unlink/chmod/chown for UNIX path sockets in [`UserOptions`]
+unix_path_tools = ["nix"]
+
+## Enable constructing sockets from inherited file descriptor. Disabling this should make the crate `unsafe`-free.
+sd_listen = []
+
+## Enable socket options such as receive or send buffer sizes or keepalives in [`UserOptions`]
+socket_options = ["socket2"]
 
 [dev-dependencies]
 anyhow = "1.0.71"
