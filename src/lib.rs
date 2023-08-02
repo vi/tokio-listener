@@ -688,6 +688,7 @@ impl Listener {
                     if uopts.tcp_only_v6 {
                         s.set_only_v6(true)?;
                     }
+                    #[cfg(all(unix,not(any(target_os = "solaris", target_os = "illumos"))))]
                     if uopts.tcp_reuse_port {
                         s.set_reuse_port(true)?;
                     }
@@ -748,7 +749,10 @@ impl Listener {
             }
             #[cfg(all(feature = "unix", any(target_os = "linux", target_os = "android")))]
             ListenerAddress::Abstract(a) => {
+                #[cfg(target_os = "linux")]
                 use std::os::linux::net::SocketAddrExt;
+                #[cfg(target_os = "android")]
+                use std::os::android::net::SocketAddrExt;
                 let a = std::os::unix::net::SocketAddr::from_abstract_name(a)?;
                 let s = std::os::unix::net::UnixListener::bind_addr(&a)?;
                 s.set_nonblocking(true)?;
