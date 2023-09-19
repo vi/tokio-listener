@@ -27,7 +27,7 @@
 //! use clap::Parser;
 //!
 //! #[derive(Parser)]
-//! /// Demo applicatiopn for tokio-listener
+//! /// Demo application for tokio-listener
 //! struct Args {
 //!     #[clap(flatten)]
 //!     listener: tokio_listener::ListenerAddressPositional,
@@ -400,7 +400,7 @@ pub enum ListenerAddress {
     /// Example: `@server`
     Abstract(String),
     /// "inetd" or "Accept=yes" mode where stdin and stdout (file descriptors 0 and 1) are using together as a socket
-    /// and only one connections is served. Triggered by using `inetd` or `stdio` or `-` as the address.
+    /// and only one connection is served. Triggered by using `inetd` or `stdio` or `-` as the address.
     Inetd,
     /// "Accept=no" mode - using manually specified file descriptor as a pre-created server socket reeady to accept TCP connections.
     /// Triggered by specifying `sd-listen` as address, which sets `3` as file descriptor number
@@ -922,7 +922,7 @@ impl Listener {
         return false;
     }
 
-    /// See main [`Listener::bind`] documentation for specifics of how it accepts conenctions
+    /// See main [`Listener::bind`] documentation for specifics of how it accepts connections
     pub fn poll_accept(
         &mut self,
         cx: &mut Context<'_>,
@@ -1042,7 +1042,7 @@ impl Listener {
         }
     }
 
-    /// See main [`Listener::bind`] documentation for specifics of how it accepts conenctions
+    /// See main [`Listener::bind`] documentation for specifics of how it accepts connections
     pub async fn accept(&mut self) -> std::io::Result<(Connection, SomeSocketAddr)> {
         std::future::poll_fn(|cx| self.poll_accept(cx)).await
     }

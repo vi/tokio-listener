@@ -12,7 +12,7 @@ While it is a solid default choice, sometimes more flexibility is desired, espec
 * Listening UNIX socket instead of TCP socket. It is triggered by beginning the address with `.` or `/`.
 * Listening abstract-namespaced UNIX socket on Linux. It is triggered by beginning the address with `@`.
 * Accepting connections from a pre-opened socket inherited from parent process (e.g. systemd). This is triggered by special address `sd-listen`.
-* Inetd mode - stdin/stdout can also be used for serving one connections.
+* Inetd mode - stdin/stdout can also be used for serving one connection.
 
 ## Other 
 
@@ -98,7 +98,7 @@ Hello from UNIX socket abstract mode
 # Help message of one of the examples
 
 ```
-Demo applicatiopn for tokio-listener
+Demo application for tokio-listener
 
 Usage: clap_axum [OPTIONS] <LISTEN_ADDRESS> <TEXT_TO_SERVE>
 
