@@ -1,7 +1,7 @@
 use clap::Parser;
 
 #[derive(Parser)]
-/// Demo applicatiopn for tokio-listener
+/// Demo application for tokio-listener
 struct Args {
     #[clap(flatten)]
     listener: tokio_listener::ListenerAddressPositional,
