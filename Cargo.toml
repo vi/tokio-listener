@@ -24,6 +24,7 @@ serde = { version = "1.0.171", features = ["derive"] , optional = true}
 serde_with = { version = "3.0.0", optional = true}
 socket2 = {version="0.5.3", optional=true, features=["all"]}
 tokio = { version = "1.29.1", features = ["net", "io-std", "time", "sync"] }
+tonic = { version = "0.10.2", optional = true }
 tracing = "0.1.37"
 
 [target.'cfg(unix)'.dependencies]
@@ -57,6 +58,9 @@ sd_listen = []
 ## Enable socket options such as receive or send buffer sizes or keepalives in [`UserOptions`]
 socket_options = ["socket2"]
 
+## Enable `tonic(v0.10)::transport::server::Connected` implementation for [`Connected`]
+tonic010 = ["tonic"]
+
 [dev-dependencies]
 anyhow = "1.0.71"
 argh = "0.1.10"
@@ -66,6 +70,8 @@ hyper = { version = "0.14.27", features = ["server", "http1"] }
 tokio = { version = "1.29.1", features = ["macros", "rt", "io-util"] }
 tokio-test = "0.4.2"
 toml = "0.7.6"
+tonic = { version = "0.10.2" }
+tonic-health = "0.10.2"
 tracing-subscriber = "0.3.17"
 
 [[example]]
@@ -81,6 +87,10 @@ required-features = ["clap","hyper014"]
 [[example]]
 name = "argh_hyper"
 required-features = ["hyper014", "user_facing_default"]
+
+[[example]]
+name = "tonic"
+required-features = ["tonic010"]
 
 [package.metadata."docs.rs"]
 all-features = true
