@@ -34,7 +34,6 @@ See [crate docs](https://docs.rs/tokio-listener) for API reference and some othe
 
 * There is no support of SEQPACKET or DGRAM sockets.
 * It may be slower that just using TcpListener directly, as each send or recv needs to go though a wrapper.
-* Internally it supports setting keepalive timers for TCP sockets, but this is not exposed to CLI or Serde.
 * Specifying non-UTF8-compatible paths for UNIX sockets is not supported.
 
 # Example session
