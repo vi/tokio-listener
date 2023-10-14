@@ -70,7 +70,7 @@ use std::{
 #[cfg(unix)]
 use std::os::fd::RawFd;
 
-use futures_core::Future;
+use futures_core::{Future, Stream};
 use pin_project::pin_project;
 use tokio::{
     io::{AsyncRead, AsyncWrite, Stdin, Stdout},
@@ -1048,6 +1048,19 @@ impl Listener {
     }
 }
 
+impl Stream for Listener {
+    type Item = std::io::Result<Connection>;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        match self.poll_accept(cx) {
+            Poll::Ready(Ok((connection, _))) => Poll::Ready(Some(Ok(connection))),
+            Poll::Ready(Err(err)) => Poll::Ready(Some(Err(err))),
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+
 /// This function defines errors that are per-connection. Which basically
 /// means that if we get this error from `accept()` system call it means
 /// next connection might be ready to be accepted.
@@ -1316,6 +1329,37 @@ mod hyper014 {
                     Poll::Ready(Some(Err(e)))
                 }
                 Poll::Pending => Poll::Pending,
+            }
+        }
+    }
+}
+
+#[cfg(feature = "tonic010")]
+mod tonic010 {
+    use tonic::transport::server::{Connected, TcpConnectInfo, UdsConnectInfo};
+
+    use crate::Connection;
+
+    #[derive(Clone)]
+    pub enum ListenerConnectInfo {
+        TCP(TcpConnectInfo),
+        Unix(UdsConnectInfo),
+        Stdio,
+        Other,
+    }
+
+    impl Connected for Connection {
+        type ConnectInfo = ListenerConnectInfo;
+
+        fn connect_info(&self) -> Self::ConnectInfo {
+            if let Some(tcp_stream) = self.try_borrow_tcp() {
+                ListenerConnectInfo::TCP(tcp_stream.connect_info())
+            } else if let Some(unix_stream) = self.try_borrow_unix() {
+                ListenerConnectInfo::Unix(unix_stream.connect_info())
+            } else if let Some(_) = self.try_borrow_stdio() {
+                ListenerConnectInfo::Stdio
+            } else {
+                ListenerConnectInfo::Other
             }
         }
     }
