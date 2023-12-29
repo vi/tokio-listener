@@ -17,9 +17,9 @@ async fn main() -> anyhow::Result<()> {
 
     let listener : tokio_listener::Listener = args.listener.bind().await?;
 
-    let app = axum::Router::new().route("/", axum::routing::get(|| async { args.text_to_serve }));
+    let app = axum06::Router::new().route("/", axum06::routing::get(|| async { args.text_to_serve }));
 
-    axum::Server::builder(listener)
+    axum06::Server::builder(listener)
         .serve(app.into_make_service())
         .await?;
 

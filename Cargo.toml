@@ -18,7 +18,7 @@ clap = { version = "4.3.11", default-features = false, features = ["derive", "st
 
 document-features = "0.2.7"
 futures-core = "0.3.28"
-hyper = { version = "0.14.27", optional = true, features = ["server"] }
+hyper014 = { version = "0.14.27", optional = true, features = ["server"], package="hyper" }
 pin-project = "1.1.2"
 serde = { version = "1.0.171", features = ["derive"] , optional = true}
 serde_with = { version = "3.0.0", optional = true}
@@ -41,7 +41,7 @@ user_facing_default = ["inetd", "unix", "unix_path_tools", "sd_listen", "socket_
 serde = ["dep:serde", "serde_with"]
 
 ## Enable `hyper(v0.14)::server::accept::Accept` implementation for [`Listener`]
-hyper014 = ["hyper"]
+hyper014 = ["dep:hyper014"]
 
 ## Enable inetd (stdin/stdout) mode
 inetd = []
@@ -64,9 +64,9 @@ tonic010 = ["tonic"]
 [dev-dependencies]
 anyhow = "1.0.71"
 argh = "0.1.10"
-axum = "0.6.18"
+axum06 = { version="0.6.18", package="axum" }
 clap = { version = "4.3.11", features = ["help"] }
-hyper = { version = "0.14.27", features = ["server", "http1"] }
+hyper014 = { version = "0.14.27", features = ["server", "http1"], package="hyper" }
 tokio = { version = "1.29.1", features = ["macros", "rt", "io-util"] }
 tokio-test = "0.4.2"
 toml = "0.7.6"
@@ -80,12 +80,12 @@ required-features = ["serde", "sd_listen"]
 
 
 [[example]]
-name = "clap_axum"
+name = "clap_axum06"
 required-features = ["clap","hyper014"]
 
 
 [[example]]
-name = "argh_hyper"
+name = "argh_hyper014"
 required-features = ["hyper014", "user_facing_default"]
 
 [[example]]

@@ -1,7 +1,7 @@
 use std::convert::Infallible;
 
 use argh::FromArgs;
-use hyper::{
+use hyper014::{
     service::{make_service_fn, service_fn},
     Body, Request, Response,
 };
@@ -97,7 +97,7 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
-    hyper::server::Server::builder(listener)
+    hyper014::server::Server::builder(listener)
         .serve(make_svc)
         .await?;
 

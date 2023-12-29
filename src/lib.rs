@@ -38,9 +38,9 @@
 //!
 //! let listener = args.listener.bind().await.unwrap();
 //!
-//! let app = axum::Router::new().route("/", axum::routing::get(|| async { "Hello, world\n" }));
+//! let app = axum06::Router::new().route("/", axum06::routing::get(|| async { "Hello, world\n" }));
 //!
-//! axum::Server::builder(listener).serve(app.into_make_service()).await;
+//! axum06::Server::builder(listener).serve(app.into_make_service()).await;
 //! # }) }
 //! ```
 //!
@@ -1307,7 +1307,7 @@ mod hyper014 {
         task::{self, Poll},
     };
 
-    use hyper::server::accept::Accept;
+    use hyper014::server::accept::Accept;
 
     use crate::Listener;
 
