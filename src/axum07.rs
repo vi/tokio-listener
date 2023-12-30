@@ -1,14 +1,15 @@
-use std::{marker::PhantomData, convert::Infallible, net::SocketAddr, io, future::{IntoFuture, poll_fn}, task::{Context, Poll}, pin::Pin, time::Duration};
+use std::{marker::PhantomData, convert::Infallible, net::SocketAddr, io, future::{IntoFuture, poll_fn}, task::{Context, Poll}, pin::Pin, time::Duration, sync::Arc};
 
 use axum07::{extract::{Request, connect_info::Connected}, response::Response, body::Body};
 use tower_service::Service;
+use tracing::trace;
 use std::future::Future;
 use hyper1::body::Incoming;
 use hyper_util::{
     rt::{TokioExecutor, TokioIo},
     server::conn::auto::Builder,
 };
-use tokio::net::{TcpListener, TcpStream};
+use tokio::{net::{TcpListener, TcpStream}, sync::watch};
 use tower::{util::Oneshot, ServiceExt};
 use futures_util::{pin_mut, FutureExt};
 
@@ -230,6 +231,199 @@ async fn tokio_listener_accept(listener: &mut crate::Listener) -> Option<(crate:
             tracing::error!("accept error: {e}");
             tokio::time::sleep(Duration::from_secs(1)).await;
             None
+        }
+    }
+}
+
+/// Serve future with graceful shutdown enabled.
+pub struct WithGracefulShutdown<M, S, F> {
+    tokio_listener: crate::Listener,
+    make_service: M,
+    signal: F,
+    _marker: PhantomData<S>,
+}
+
+impl<M, S, F> std::fmt::Debug for WithGracefulShutdown<M, S, F>
+where
+    M: std::fmt::Debug,
+    S: std::fmt::Debug,
+    F: std::fmt::Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Self {
+            tokio_listener,
+            make_service,
+            signal,
+            _marker: _,
+        } = self;
+
+        f.debug_struct("WithGracefulShutdown")
+            .field("tokio_listener", tokio_listener)
+            .field("make_service", make_service)
+            .field("signal", signal)
+            .finish()
+    }
+}
+
+impl<M, S> std::fmt::Debug for Serve<M, S>
+where
+    M: std::fmt::Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Self {
+            tokio_listener,
+            make_service,
+            _marker: _,
+        } = self;
+
+        f.debug_struct("Serve")
+            .field("tokio_listener", tokio_listener)
+            .field("make_service", make_service)
+            .finish()
+    }
+}
+
+impl<M, S, F> IntoFuture for WithGracefulShutdown<M, S, F>
+where
+    M: for<'a> Service<IncomingStream<'a>, Error = Infallible, Response = S> + Send + 'static,
+    for<'a> <M as Service<IncomingStream<'a>>>::Future: Send,
+    S: Service<Request, Response = Response, Error = Infallible> + Clone + Send + 'static,
+    S::Future: Send,
+    F: Future<Output = ()> + Send + 'static,
+{
+    type Output = io::Result<()>;
+    type IntoFuture = private::ServeFuture;
+
+    fn into_future(self) -> Self::IntoFuture {
+        let Self {
+            mut tokio_listener,
+            mut make_service,
+            signal,
+            _marker: _,
+        } = self;
+
+        let (signal_tx, signal_rx) = watch::channel(());
+        let signal_tx = Arc::new(signal_tx);
+        tokio::spawn(async move {
+            signal.await;
+            tracing::trace!("received graceful shutdown signal. Telling tasks to shutdown");
+            drop(signal_rx);
+        });
+
+        let (close_tx, close_rx) = watch::channel(());
+
+        private::ServeFuture(Box::pin(async move {
+            loop {
+                let (tcp_stream, remote_addr) = tokio::select! {
+                    conn = tokio_listener_accept(&mut tokio_listener) => {
+                        match conn {
+                            Some(conn) => conn,
+                            None => continue,
+                        }
+                    }
+                    _ = signal_tx.closed() => {
+                        trace!("signal received, not accepting new connections");
+                        break;
+                    }
+                };
+                let tcp_stream = TokioIo::new(tcp_stream);
+
+                trace!("connection {remote_addr} accepted");
+
+                poll_fn(|cx| make_service.poll_ready(cx))
+                    .await
+                    .unwrap_or_else(|err| match err {});
+
+                let tower_service = make_service
+                    .call(IncomingStream {
+                        tcp_stream: &tcp_stream,
+                        remote_addr,
+                    })
+                    .await
+                    .unwrap_or_else(|err| match err {});
+
+                let hyper_service = TowerToHyperService {
+                    service: tower_service,
+                };
+
+                let signal_tx = Arc::clone(&signal_tx);
+
+                let close_rx = close_rx.clone();
+
+                tokio::spawn(async move {
+                    let builder = Builder::new(TokioExecutor::new());
+                    let conn = builder.serve_connection_with_upgrades(tcp_stream, hyper_service);
+                    pin_mut!(conn);
+
+                    let signal_closed = signal_tx.closed().fuse();
+                    pin_mut!(signal_closed);
+
+                    loop {
+                        tokio::select! {
+                            result = conn.as_mut() => {
+                                if let Err(_err) = result {
+                                    trace!("failed to serve connection: {_err:#}");
+                                }
+                                break;
+                            }
+                            _ = &mut signal_closed => {
+                                trace!("signal received in task, starting graceful shutdown");
+                                conn.as_mut().graceful_shutdown();
+                            }
+                        }
+                    }
+
+                    trace!("a connection closed");
+
+                    drop(close_rx);
+                });
+            }
+
+            drop(close_rx);
+            drop(tokio_listener);
+
+            trace!(
+                "waiting for {} task(s) to finish",
+                close_tx.receiver_count()
+            );
+            close_tx.closed().await;
+
+            Ok(())
+        }))
+    }
+}
+
+impl<M, S> Serve<M, S> {
+    /// Prepares a server to handle graceful shutdown when the provided future completes.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use axum::{Router, routing::get};
+    ///
+    /// # async {
+    /// let router = Router::new().route("/", get(|| async { "Hello, World!" }));
+    ///
+    /// let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    /// axum::serve(listener, router)
+    ///     .with_graceful_shutdown(shutdown_signal())
+    ///     .await
+    ///     .unwrap();
+    /// # };
+    ///
+    /// async fn shutdown_signal() {
+    ///     // ...
+    /// }
+    /// ```
+    pub fn with_graceful_shutdown<F>(self, signal: F) -> WithGracefulShutdown<M, S, F>
+    where
+        F: Future<Output = ()> + Send + 'static,
+    {
+        WithGracefulShutdown {
+            tokio_listener: self.tokio_listener,
+            make_service: self.make_service,
+            signal,
+            _marker: PhantomData,
         }
     }
 }

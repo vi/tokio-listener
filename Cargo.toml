@@ -96,6 +96,10 @@ required-features = ["clap","hyper014"]
 name = "clap_axum07"
 required-features = ["clap","axum07"]
 
+[[example]]
+name = "clap_axum07_advanced"
+required-features = ["clap","axum07"]
+
 
 [[example]]
 name = "argh_hyper014"

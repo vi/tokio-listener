@@ -636,6 +636,18 @@ pub struct Listener {
     timeout: Option<Pin<Box<Sleep>>>,
 }
 
+impl std::fmt::Debug for Listener {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.i {
+            ListenerImpl::Tcp { .. } => f.write_str("tokio_listener::Listener(tcp)"),
+            #[cfg(all(feature = "unix", unix))]
+            ListenerImpl::Unix { .. } => f.write_str("tokio_listener::Listener(unix)"),
+            #[cfg(feature = "inetd")]
+            ListenerImpl::Stdio(_) => f.write_str("tokio_listener::Listener(stdio)"),
+        }
+    }
+}
+
 #[cfg(feature = "sd_listen")]
 // based on https://docs.rs/sd-notify/0.4.1/src/sd_notify/lib.rs.html#164, but simplified
 #[allow(unused)]
@@ -1089,7 +1101,9 @@ impl std::fmt::Debug  for Connection {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.0 {
             ConnectionImpl::Tcp(_) => f.write_str("Connection(tcp)"),
+            #[cfg(all(feature = "unix", unix))]
             ConnectionImpl::Unix(_) => f.write_str("Connection(unix)"),
+            #[cfg(feature = "inetd")]
             ConnectionImpl::Stdio(_, _, _) => f.write_str("Connection(stdio)"),
         }
     }
