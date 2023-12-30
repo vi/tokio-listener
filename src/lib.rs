@@ -412,6 +412,8 @@ pub enum ListenerAddress {
 
 #[cfg(feature = "clap")]
 mod claptools {
+    #![allow(rustdoc::broken_intra_doc_links)]
+
     use clap::Parser;
     /// Clap helper to require listener address as a required positional argument `listen_address`,
     /// for `clap(flatten)`-ing into your primary options struct.
@@ -1325,6 +1327,8 @@ impl Display for SomeSocketAddr {
 }
 
 impl SomeSocketAddr {
+    /// Convert this address representation into a clonable form.
+    /// For UNIX socket addresses, it converts them to a string using Debug representation.
     pub fn clonable(&self) -> SomeSocketAddrClonable {
         match self {
             SomeSocketAddr::Tcp(x) => SomeSocketAddrClonable::Tcp(*x),

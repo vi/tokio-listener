@@ -1,26 +1,38 @@
-use std::{marker::PhantomData, convert::Infallible, net::SocketAddr, io, future::{IntoFuture, poll_fn}, task::{Context, Poll}, pin::Pin, time::Duration, sync::Arc};
+use std::{
+    convert::Infallible,
+    future::{poll_fn, IntoFuture},
+    io,
+    marker::PhantomData,
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+    time::Duration,
+};
 
-use axum07::{extract::{Request, connect_info::Connected}, response::Response, body::Body};
-use tower_service::Service;
-use tracing::trace;
-use std::future::Future;
+use axum07::{
+    body::Body,
+    extract::{connect_info::Connected, Request},
+    response::Response,
+};
+use futures_util::{pin_mut, FutureExt};
 use hyper1::body::Incoming;
 use hyper_util::{
     rt::{TokioExecutor, TokioIo},
     server::conn::auto::Builder,
 };
-use tokio::{net::{TcpListener, TcpStream}, sync::watch};
+use std::future::Future;
+use tokio::sync::watch;
 use tower::{util::Oneshot, ServiceExt};
-use futures_util::{pin_mut, FutureExt};
+use tower_service::Service;
+use tracing::trace;
 
 use crate::{is_connection_error, SomeSocketAddr, SomeSocketAddrClonable};
-
 
 /// An incoming stream.
 ///
 /// Used with [`serve`] and [`IntoMakeServiceWithConnectInfo`].
 ///
-/// [`IntoMakeServiceWithConnectInfo`]: crate::extract::connect_info::IntoMakeServiceWithConnectInfo
+/// [`IntoMakeServiceWithConnectInfo`]: axum07::extract::connect_info::IntoMakeServiceWithConnectInfo
 #[derive(Debug)]
 pub struct IncomingStream<'a> {
     tcp_stream: &'a TokioIo<crate::Connection>,
@@ -40,7 +52,9 @@ impl IncomingStream<'_> {
         if let Some(_) = q.try_borrow_stdio() {
             return Ok(SomeSocketAddr::Stdio);
         }
-        Err(std::io::Error::other("unhandled tokio-listener address type"))
+        Err(std::io::Error::other(
+            "unhandled tokio-listener address type",
+        ))
     }
 
     /// Returns the remote address that this stream is bound to.
@@ -55,7 +69,6 @@ impl Connected<IncomingStream<'_>> for SomeSocketAddrClonable {
     }
 }
 
-
 /// Future returned by [`serve`].
 pub struct Serve<M, S> {
     tokio_listener: crate::Listener,
@@ -63,12 +76,19 @@ pub struct Serve<M, S> {
     _marker: PhantomData<S>,
 }
 
+/// Serve the service with the supplied `tokio_listener`-based listener.
+///
+/// See [`axum07::serve::serve`] for more documentation.
+/// 
+/// See the following examples in `tokio_listener` project:
+/// 
+/// * [`clap_axum07.rs`](https://github.com/vi/tokio-listener/blob/main/examples/clap_axum07.rs) for simple example
+/// * [`clap_axum07_advanced.rs`](https://github.com/vi/tokio-listener/blob/main/examples/clap_axum07_advanced.rs) for using incoming connection info and graceful shutdown.
 pub fn serve<M, S>(tokio_listener: crate::Listener, make_service: M) -> Serve<M, S>
 where
     M: for<'a> Service<IncomingStream<'a>, Error = Infallible, Response = S>,
     S: Service<Request, Response = Response, Error = Infallible> + Clone + Send + 'static,
     S::Future: Send,
-
 {
     Serve {
         tokio_listener: tokio_listener,
@@ -96,10 +116,11 @@ where
             } = self;
 
             loop {
-                let (tcp_stream, remote_addr) = match tokio_listener_accept(&mut tokio_listener).await {
-                    Some(conn) => conn,
-                    None => continue,
-                };
+                let (tcp_stream, remote_addr) =
+                    match tokio_listener_accept(&mut tokio_listener).await {
+                        Some(conn) => conn,
+                        None => continue,
+                    };
                 let tcp_stream = TokioIo::new(tcp_stream);
 
                 poll_fn(|cx| make_service.poll_ready(cx))
@@ -165,7 +186,6 @@ mod private {
     }
 }
 
-
 #[derive(Debug, Copy, Clone)]
 struct TowerToHyperService<S> {
     service: S,
@@ -196,7 +216,6 @@ where
     future: Oneshot<S, R>,
 }
 
-
 impl<S, R> Future for TowerToHyperServiceFuture<S, R>
 where
     S: tower_service::Service<R>,
@@ -209,7 +228,9 @@ where
     }
 }
 
-async fn tokio_listener_accept(listener: &mut crate::Listener) -> Option<(crate::Connection, SomeSocketAddr)> {
+async fn tokio_listener_accept(
+    listener: &mut crate::Listener,
+) -> Option<(crate::Connection, SomeSocketAddr)> {
     match listener.accept().await {
         Ok(conn) => Some(conn),
         Err(e) => {
@@ -396,25 +417,9 @@ where
 impl<M, S> Serve<M, S> {
     /// Prepares a server to handle graceful shutdown when the provided future completes.
     ///
-    /// # Example
-    ///
-    /// ```
-    /// use axum::{Router, routing::get};
-    ///
-    /// # async {
-    /// let router = Router::new().route("/", get(|| async { "Hello, World!" }));
-    ///
-    /// let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-    /// axum::serve(listener, router)
-    ///     .with_graceful_shutdown(shutdown_signal())
-    ///     .await
-    ///     .unwrap();
-    /// # };
-    ///
-    /// async fn shutdown_signal() {
-    ///     // ...
-    /// }
-    /// ```
+    /// See [the original documentation][1] for the example.
+    /// 
+    /// [1]: axum07::serve::Serve::with_graceful_shutdown
     pub fn with_graceful_shutdown<F>(self, signal: F) -> WithGracefulShutdown<M, S, F>
     where
         F: Future<Output = ()> + Send + 'static,

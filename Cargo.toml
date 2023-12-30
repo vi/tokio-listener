@@ -67,7 +67,7 @@ sd_listen = []
 ## Enable socket options such as receive or send buffer sizes or keepalives in [`UserOptions`]
 socket_options = ["socket2"]
 
-## Enable `tonic(v0.10)::transport::server::Connected` implementation for [`Connected`]
+## Enable `tonic(v0.10)::transport::server::Connected` implementation for [`Connection`]
 tonic010 = ["tonic"]
 
 [dev-dependencies]
