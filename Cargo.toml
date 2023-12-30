@@ -1,6 +1,6 @@
 [package]
 name = "tokio-listener"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 repository = "https://github.com/vi/tokio-listener"
 license = "MIT/Apache-2.0"
@@ -38,7 +38,7 @@ nix = { version = "0.26.2", default-features = false, features = ["user", "fs"],
 
 
 [features]
-default = ["hyper014", "user_facing_default", "axum07"]
+default = ["hyper014", "user_facing_default"]
 
 ## Subset of default features that add features supposed to be accessed by end user
 user_facing_default = ["inetd", "unix", "unix_path_tools", "sd_listen", "socket_options"]
