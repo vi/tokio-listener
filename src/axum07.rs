@@ -12,7 +12,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tower::{util::Oneshot, ServiceExt};
 use futures_util::{pin_mut, FutureExt};
 
-use crate::is_connection_error;
+use crate::{is_connection_error, SomeSocketAddr, SomeSocketAddrClonable};
 
 
 /// An incoming stream.
@@ -22,23 +22,33 @@ use crate::is_connection_error;
 /// [`IntoMakeServiceWithConnectInfo`]: crate::extract::connect_info::IntoMakeServiceWithConnectInfo
 #[derive(Debug)]
 pub struct IncomingStream<'a> {
-    tcp_stream: &'a TokioIo<TcpStream>,
-    remote_addr: SocketAddr,
+    tcp_stream: &'a TokioIo<crate::Connection>,
+    remote_addr: SomeSocketAddr,
 }
 
 impl IncomingStream<'_> {
     /// Returns the local address that this stream is bound to.
-    pub fn local_addr(&self) -> std::io::Result<SocketAddr> {
-        self.tcp_stream.inner().local_addr()
+    pub fn local_addr(&self) -> std::io::Result<SomeSocketAddr> {
+        let q = self.tcp_stream.inner();
+        if let Some(a) = q.try_borrow_tcp() {
+            return Ok(SomeSocketAddr::Tcp(a.local_addr()?));
+        }
+        if let Some(a) = q.try_borrow_unix() {
+            return Ok(SomeSocketAddr::Unix(a.local_addr()?));
+        }
+        if let Some(_) = q.try_borrow_stdio() {
+            return Ok(SomeSocketAddr::Stdio);
+        }
+        Err(std::io::Error::other("unhandled tokio-listener address type"))
     }
 
     /// Returns the remote address that this stream is bound to.
-    pub fn remote_addr(&self) -> SocketAddr {
-        self.remote_addr
+    pub fn remote_addr(&self) -> SomeSocketAddrClonable {
+        self.remote_addr.clonable()
     }
 }
 
-impl Connected<IncomingStream<'_>> for SocketAddr {
+impl Connected<IncomingStream<'_>> for SomeSocketAddrClonable {
     fn connect_info(target: IncomingStream<'_>) -> Self {
         target.remote_addr()
     }
@@ -47,12 +57,12 @@ impl Connected<IncomingStream<'_>> for SocketAddr {
 
 /// Future returned by [`serve`].
 pub struct Serve<M, S> {
-    tcp_listener: TcpListener,
+    tokio_listener: crate::Listener,
     make_service: M,
     _marker: PhantomData<S>,
 }
 
-pub fn serve<M, S>(tcp_listener: TcpListener, make_service: M) -> Serve<M, S>
+pub fn serve<M, S>(tokio_listener: crate::Listener, make_service: M) -> Serve<M, S>
 where
     M: for<'a> Service<IncomingStream<'a>, Error = Infallible, Response = S>,
     S: Service<Request, Response = Response, Error = Infallible> + Clone + Send + 'static,
@@ -60,7 +70,7 @@ where
 
 {
     Serve {
-        tcp_listener,
+        tokio_listener: tokio_listener,
         make_service,
         _marker: PhantomData,
     }
@@ -79,13 +89,13 @@ where
     fn into_future(self) -> Self::IntoFuture {
         private::ServeFuture(Box::pin(async move {
             let Self {
-                tcp_listener,
+                mut tokio_listener,
                 mut make_service,
                 _marker: _,
             } = self;
 
             loop {
-                let (tcp_stream, remote_addr) = match tcp_accept(&tcp_listener).await {
+                let (tcp_stream, remote_addr) = match tokio_listener_accept(&mut tokio_listener).await {
                     Some(conn) => conn,
                     None => continue,
                 };
@@ -198,7 +208,7 @@ where
     }
 }
 
-async fn tcp_accept(listener: &TcpListener) -> Option<(TcpStream, SocketAddr)> {
+async fn tokio_listener_accept(listener: &mut crate::Listener) -> Option<(crate::Connection, SomeSocketAddr)> {
     match listener.accept().await {
         Ok(conn) => Some(conn),
         Err(e) => {

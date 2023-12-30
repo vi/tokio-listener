@@ -1085,6 +1085,16 @@ fn is_connection_error(e: &std::io::Error) -> bool {
 #[pin_project]
 pub struct Connection(#[pin] ConnectionImpl);
 
+impl std::fmt::Debug  for Connection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.0 {
+            ConnectionImpl::Tcp(_) => f.write_str("Connection(tcp)"),
+            ConnectionImpl::Unix(_) => f.write_str("Connection(unix)"),
+            ConnectionImpl::Stdio(_, _, _) => f.write_str("Connection(stdio)"),
+        }
+    }
+}
+
 #[derive(Debug)]
 #[pin_project(project = ConnectionImplProj)]
 enum ConnectionImpl {
@@ -1299,6 +1309,49 @@ impl Display for SomeSocketAddr {
         }
     }
 }
+
+impl SomeSocketAddr {
+    pub fn clonable(&self) -> SomeSocketAddrClonable {
+        match self {
+            SomeSocketAddr::Tcp(x) => SomeSocketAddrClonable::Tcp(*x),
+            #[cfg(all(feature = "unix", unix))]
+            SomeSocketAddr::Unix(x) => SomeSocketAddrClonable::Unix(format!("{:?}", x)),
+            #[cfg(feature = "inetd")]
+            SomeSocketAddr::Stdio => SomeSocketAddrClonable::Stdio,
+        }
+    }
+}
+
+/// Other representation of [`SomeSocketAddr`] with Unix addresses stringified (using Debug representation) to enable cloning
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+#[allow(missing_docs)]
+pub enum SomeSocketAddrClonable {
+    Tcp(SocketAddr),
+    #[cfg(all(feature = "unix", unix))]
+    Unix(String),
+    #[cfg(feature = "inetd")]
+    Stdio,
+}
+
+impl Display for SomeSocketAddrClonable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SomeSocketAddrClonable::Tcp(x) => x.fmt(f),
+            #[cfg(all(feature = "unix", unix))]
+            SomeSocketAddrClonable::Unix(_x) => write!(f, "unix:{}", _x),
+            #[cfg(feature = "inetd")]
+            SomeSocketAddrClonable::Stdio => "stdio".fmt(f),
+        }
+    }
+}
+
+impl From<SomeSocketAddr> for SomeSocketAddrClonable {
+    fn from(value: SomeSocketAddr) -> Self {
+        value.clonable()
+    }
+}
+
 
 #[cfg(feature = "hyper014")]
 mod hyper014 {
