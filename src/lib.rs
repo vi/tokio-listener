@@ -1428,14 +1428,18 @@ mod tonic010 {
 
         fn connect_info(&self) -> Self::ConnectInfo {
             if let Some(tcp_stream) = self.try_borrow_tcp() {
-                ListenerConnectInfo::TCP(tcp_stream.connect_info())
-            } else if let Some(unix_stream) = self.try_borrow_unix() {
-                ListenerConnectInfo::Unix(unix_stream.connect_info())
-            } else if let Some(_) = self.try_borrow_stdio() {
-                ListenerConnectInfo::Stdio
-            } else {
-                ListenerConnectInfo::Other
+                return ListenerConnectInfo::TCP(tcp_stream.connect_info());
             }
+            #[cfg(all(feature = "unix", unix))]
+            if let Some(unix_stream) = self.try_borrow_unix() {
+                return ListenerConnectInfo::Unix(unix_stream.connect_info())
+            }
+            #[cfg(feature = "inetd")]
+            if let Some(_) = self.try_borrow_stdio() {
+                return ListenerConnectInfo::Stdio;
+            }
+
+            ListenerConnectInfo::Other
         }
     }
 }

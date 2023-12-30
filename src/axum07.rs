@@ -46,9 +46,11 @@ impl IncomingStream<'_> {
         if let Some(a) = q.try_borrow_tcp() {
             return Ok(SomeSocketAddr::Tcp(a.local_addr()?));
         }
+        #[cfg(all(feature = "unix", unix))]
         if let Some(a) = q.try_borrow_unix() {
             return Ok(SomeSocketAddr::Unix(a.local_addr()?));
         }
+        #[cfg(feature = "inetd")]
         if let Some(_) = q.try_borrow_stdio() {
             return Ok(SomeSocketAddr::Stdio);
         }
