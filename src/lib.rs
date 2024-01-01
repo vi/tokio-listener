@@ -1,3 +1,4 @@
+#![cfg_attr(docsrs_alt, feature(doc_cfg))]
 #![warn(missing_docs)]
 //! Library for abstracting over TCP server sockets, UNIX server sockets, inetd-like mode.
 //!
@@ -83,6 +84,7 @@ use tracing::{debug, error, info, trace, warn};
 #[cfg(unix)]
 use tokio::net::{UnixListener, UnixStream};
 
+#[cfg_attr(docsrs_alt, doc(cfg(feature = "unix_path_tools")))]
 #[cfg(feature = "unix_path_tools")]
 /// Value of `--unix-listen-chmod` option which allows changing DAC file access mode for UNIX path socket
 #[non_exhaustive]
@@ -101,6 +103,7 @@ pub enum UnixChmodVariant {
 }
 
 #[cfg(feature = "unix_path_tools")]
+#[cfg_attr(docsrs_alt, doc(cfg(feature = "unix_path_tools")))]
 impl Display for UnixChmodVariant {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -112,6 +115,7 @@ impl Display for UnixChmodVariant {
 }
 
 #[cfg(feature = "unix_path_tools")]
+#[cfg_attr(docsrs_alt, doc(cfg(feature = "unix_path_tools")))]
 impl FromStr for UnixChmodVariant {
     type Err = &'static str;
 
@@ -129,6 +133,7 @@ impl FromStr for UnixChmodVariant {
 }
 
 #[cfg(feature = "socket_options")]
+#[cfg_attr(docsrs_alt, doc(cfg(feature = "socket_options")))]
 /// Value of `--tcp-keepalive` option.
 ///
 /// When parsed from string, it expects 0 to 3 colon-separated numbers:
@@ -284,6 +289,7 @@ impl TcpKeepaliveParams {
 /// Disabling related crate features removes them for good though.
 pub struct UserOptions {
     #[cfg(feature = "unix_path_tools")]
+    #[cfg_attr(docsrs_alt, doc(cfg(feature = "unix_path_tools")))]
     /// remove UNIX socket prior to binding to it
     #[cfg_attr(feature = "clap", clap(long))]
     #[cfg_attr(feature = "serde", serde(default))]
@@ -291,6 +297,7 @@ pub struct UserOptions {
     pub unix_listen_unlink: bool,
 
     #[cfg(feature = "unix_path_tools")]
+    #[cfg_attr(docsrs_alt, doc(cfg(feature = "unix_path_tools")))]
     /// change filesystem mode of the newly bound UNIX socket to `owner`, `group` or `everybody`
     #[cfg_attr(feature = "clap", clap(long))]
     #[cfg_attr(all(feature = "clap", not(unix)), clap(hide = true))]
@@ -298,6 +305,7 @@ pub struct UserOptions {
     pub unix_listen_chmod: Option<UnixChmodVariant>,
 
     #[cfg(feature = "unix_path_tools")]
+    #[cfg_attr(docsrs_alt, doc(cfg(feature = "unix_path_tools")))]
     /// change owner user of the newly bound UNIX socket to this numeric uid
     #[cfg_attr(feature = "clap", clap(long))]
     #[cfg_attr(feature = "serde", serde(default))]
@@ -305,6 +313,7 @@ pub struct UserOptions {
     pub unix_listen_uid: Option<u32>,
 
     #[cfg(feature = "unix_path_tools")]
+    #[cfg_attr(docsrs_alt, doc(cfg(feature = "unix_path_tools")))]
     /// change owner group of the newly bound UNIX socket to this numeric uid
     #[cfg_attr(feature = "clap", clap(long))]
     #[cfg_attr(feature = "serde", serde(default))]
@@ -312,6 +321,7 @@ pub struct UserOptions {
     pub unix_listen_gid: Option<u32>,
 
     #[cfg(feature = "sd_listen")]
+    #[cfg_attr(docsrs_alt, doc(cfg(feature = "sd_listen")))]
     /// ignore environment variables like LISTEN_PID or LISTEN_FDS and unconditionally use
     /// file descritor `3` as a socket in sd-listen or sd-listen-unix modes
     #[cfg_attr(feature = "clap", clap(long))]
@@ -320,6 +330,7 @@ pub struct UserOptions {
     pub sd_accept_ignore_environment: bool,
 
     #[cfg(feature = "socket_options")]
+    #[cfg_attr(docsrs_alt, doc(cfg(feature = "socket_options")))]
     /// set SO_KEEPALIVE settings for each accepted TCP connection.
     /// 
     /// Value is a colon-separated triplet of time_ms:count:interval_ms, each of which is optional.
@@ -328,6 +339,7 @@ pub struct UserOptions {
     pub tcp_keepalive: Option<TcpKeepaliveParams>,
 
     #[cfg(feature = "socket_options")]
+    #[cfg_attr(docsrs_alt, doc(cfg(feature = "socket_options")))]
     /// Try to set SO_REUSEPORT, so that multiple processes can accept connections from the same port
     /// in a round-robin fashion
     #[cfg_attr(feature = "clap", clap(long))]
@@ -335,24 +347,28 @@ pub struct UserOptions {
     pub tcp_reuse_port: bool,
 
     #[cfg(feature = "socket_options")]
+    #[cfg_attr(docsrs_alt, doc(cfg(feature = "socket_options")))]
     /// Set socket's SO_RCVBUF value.
     #[cfg_attr(feature = "clap", clap(long))]
     #[cfg_attr(feature = "serde", serde(default))]
     pub recv_buffer_size: Option<usize>,
 
     #[cfg(feature = "socket_options")]
+    #[cfg_attr(docsrs_alt, doc(cfg(feature = "socket_options")))]
     /// Set socket's SO_SNDBUF value.
     #[cfg_attr(feature = "clap", clap(long))]
     #[cfg_attr(feature = "serde", serde(default))]
     pub send_buffer_size: Option<usize>,
 
     #[cfg(feature = "socket_options")]
+    #[cfg_attr(docsrs_alt, doc(cfg(feature = "socket_options")))]
     /// Set socket's IPV6_V6ONLY to true, to avoid receiving IPv4 connections on IPv6 socket.
     #[cfg_attr(feature = "clap", clap(long))]
     #[cfg_attr(feature = "serde", serde(default))]
     pub tcp_only_v6: bool,
 
     #[cfg(feature = "socket_options")]
+    #[cfg_attr(docsrs_alt, doc(cfg(feature = "socket_options")))]
     /// Maximum number of pending unaccepted connections
     #[cfg_attr(feature = "clap", clap(long))]
     #[cfg_attr(feature = "serde", serde(default))]
@@ -411,6 +427,7 @@ pub enum ListenerAddress {
 }
 
 #[cfg(feature = "clap")]
+#[cfg_attr(docsrs_alt, doc(cfg(feature = "clap")))]
 mod claptools {
     #![allow(rustdoc::broken_intra_doc_links)]
 
@@ -898,6 +915,7 @@ impl Listener {
     }
     #[allow(missing_docs)]
     #[cfg(all(feature = "unix", unix))]
+    #[cfg_attr(docsrs_alt, doc(cfg(all(feature = "unix", unix))))]
     pub fn try_borrow_unix_listener(&self) -> Option<&UnixListener> {
         if let ListenerImpl::Unix { s: ref x, .. } = self.i {
             Some(x)
@@ -916,6 +934,7 @@ impl Listener {
     }
     #[allow(missing_docs)]
     #[cfg(all(feature = "unix", unix))]
+    #[cfg_attr(docsrs_alt, doc(cfg(all(feature = "unix", unix))))]
     pub fn try_into_unix_listener(self) -> Result<UnixListener, Self> {
         if let ListenerImpl::Unix { s: x, .. } = self.i {
             Ok(x)
@@ -1136,6 +1155,7 @@ impl Connection {
     }
     #[allow(missing_docs)]
     #[cfg(all(feature = "unix", unix))]
+    #[cfg_attr(docsrs_alt, doc(cfg(all(feature = "unix", unix))))]
     pub fn try_into_unix(self) -> Result<UnixStream, Self> {
         if let ConnectionImpl::Unix(s) = self.0 {
             Ok(s)
@@ -1144,6 +1164,7 @@ impl Connection {
         }
     }
     #[cfg(feature = "inetd")]
+    #[cfg_attr(docsrs_alt, doc(cfg(feature = "inetd")))]
     #[allow(missing_docs)]
     pub fn try_into_stdio(self) -> Result<(Stdin, Stdout, Option<Sender<()>>), Self> {
         if let ConnectionImpl::Stdio(i, o, f) = self.0 {
@@ -1162,6 +1183,7 @@ impl Connection {
         }
     }
     #[cfg(all(feature = "unix", unix))]
+    #[cfg_attr(docsrs_alt, doc(cfg(all(feature = "unix", unix))))]
     #[allow(missing_docs)]
     pub fn try_borrow_unix(&self) -> Option<&UnixStream> {
         if let ConnectionImpl::Unix(ref s) = self.0 {
@@ -1171,6 +1193,7 @@ impl Connection {
         }
     }
     #[cfg(feature = "inetd")]
+    #[cfg_attr(docsrs_alt, doc(cfg(feature = "inetd")))]
     #[allow(missing_docs)]
     pub fn try_borrow_stdio(&self) -> Option<(&Stdin, &Stdout)> {
         if let ConnectionImpl::Stdio(ref i, ref o, ..) = self.0 {
@@ -1187,12 +1210,14 @@ impl From<TcpStream> for Connection {
     }
 }
 #[cfg(all(feature = "unix", unix))]
+#[cfg_attr(docsrs_alt, doc(cfg(all(feature = "unix", unix))))]
 impl From<UnixStream> for Connection {
     fn from(s: UnixStream) -> Self {
         Connection(ConnectionImpl::Unix(s))
     }
 }
 #[cfg(feature = "inetd")]
+#[cfg_attr(docsrs_alt, doc(cfg(feature = "inetd")))]
 impl From<(Stdin, Stdout, Option<Sender<()>>)> for Connection {
     fn from(s: (Stdin, Stdout, Option<Sender<()>>)) -> Self {
         Connection(ConnectionImpl::Stdio(s.0, s.1, s.2))
@@ -1309,8 +1334,10 @@ impl AsyncWrite for Connection {
 pub enum SomeSocketAddr {
     Tcp(SocketAddr),
     #[cfg(all(feature = "unix", unix))]
+    #[cfg_attr(docsrs_alt, doc(cfg(all(feature = "unix", unix))))]
     Unix(tokio::net::unix::SocketAddr),
     #[cfg(feature = "inetd")]
+    #[cfg_attr(docsrs_alt, doc(cfg(feature = "inetd")))]
     Stdio,
 }
 
@@ -1347,8 +1374,10 @@ impl SomeSocketAddr {
 pub enum SomeSocketAddrClonable {
     Tcp(SocketAddr),
     #[cfg(all(feature = "unix", unix))]
+    #[cfg_attr(docsrs_alt, doc(cfg(all(feature = "unix", unix))))]
     Unix(String),
     #[cfg(feature = "inetd")]
+    #[cfg_attr(docsrs_alt, doc(cfg(feature = "inetd")))]
     Stdio,
 }
 
@@ -1372,6 +1401,7 @@ impl From<SomeSocketAddr> for SomeSocketAddrClonable {
 
 
 #[cfg(feature = "hyper014")]
+#[cfg_attr(docsrs_alt, doc(cfg(feature = "hyper014")))]
 mod hyper014 {
     use std::{
         pin::Pin,
@@ -1407,9 +1437,11 @@ mod hyper014 {
 
 /// Analogue of `axum::serve` module, but for tokio-listener.
 #[cfg(feature="axum07")]
+#[cfg_attr(docsrs_alt, doc(cfg(feature = "axum07")))]
 pub mod axum07;
 
 #[cfg(feature = "tonic010")]
+#[cfg_attr(docsrs_alt, doc(cfg(feature = "tonic010")))]
 mod tonic010 {
     use tonic::transport::server::{Connected, TcpConnectInfo, UdsConnectInfo};
 
@@ -1445,6 +1477,7 @@ mod tonic010 {
 }
 
 #[cfg(feature="tokio-util")]
+#[cfg_attr(docsrs_alt, doc(cfg(feature = "tokio-util")))]
 mod tokioutil {
     use crate::SomeSocketAddr;
 
