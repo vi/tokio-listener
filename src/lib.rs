@@ -1165,7 +1165,12 @@ impl Connection {
     }
     #[cfg(feature = "inetd")]
     #[cfg_attr(docsrs_alt, doc(cfg(feature = "inetd")))]
-    #[allow(missing_docs)]
+    /// Get parts of the connection in case of inted mode is used.
+    /// 
+    /// Third tuple part (Sender) should be used to signal [`Listener`] to exit from listening loop,
+    /// allowing proper timing of listening termination - without trying to wait for second client in inetd mode,
+    /// but also not exiting prematurely, while the client is still being served, as exiting the listening loop may
+    /// cause the whole process to finish.
     pub fn try_into_stdio(self) -> Result<(Stdin, Stdout, Option<Sender<()>>), Self> {
         if let ConnectionImpl::Stdio(i, o, f) = self.0 {
             Ok((i, o, f))
