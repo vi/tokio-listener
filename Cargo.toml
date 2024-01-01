@@ -32,6 +32,7 @@ tonic = { version = "0.10.2", optional = true }
 tracing = "0.1.37"
 axum07 = { version="0.7", package="axum" }
 futures-util = {version="0.3", optional=true}
+tokio-util = {version = "0.7", optional=true, features=["net","codec"]}
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.26.2", default-features = false, features = ["user", "fs"], optional=true }
@@ -69,6 +70,9 @@ socket_options = ["socket2"]
 
 ## Enable `tonic(v0.10)::transport::server::Connected` implementation for [`Connection`]
 tonic010 = ["tonic"]
+
+## Enable [`tokio_util::net::Listener`] implementation for [`Listener`].
+tokio-util = ["dep:tokio-util"]
 
 [dev-dependencies]
 anyhow = "1.0.71"
