@@ -65,7 +65,7 @@ use std::{
     pin::Pin,
     str::FromStr,
     task::{ready, Context, Poll},
-    time::Duration, ffi::c_int,
+    time::Duration, ffi::c_int, sync::Arc,
 };
 
 #[cfg(unix)]
@@ -1169,7 +1169,7 @@ impl Connection {
     /// 
     /// Third tuple part (Sender) should be used to signal [`Listener`] to exit from listening loop,
     /// allowing proper timing of listening termination - without trying to wait for second client in inetd mode,
-    /// but also not exiting prematurely, while the client is still being served, as exiting the listening loop may
+    /// but also without exiting prematurely, while the client is still being served, as exiting the listening loop may
     /// cause the whole process to finish.
     pub fn try_into_stdio(self) -> Result<(Stdin, Stdout, Option<Sender<()>>), Self> {
         if let ConnectionImpl::Stdio(i, o, f) = self.0 {
@@ -1361,18 +1361,18 @@ impl Display for SomeSocketAddr {
 impl SomeSocketAddr {
     /// Convert this address representation into a clonable form.
     /// For UNIX socket addresses, it converts them to a string using Debug representation.
-    pub fn clonable(&self) -> SomeSocketAddrClonable {
+    pub fn clonable(self) -> SomeSocketAddrClonable {
         match self {
-            SomeSocketAddr::Tcp(x) => SomeSocketAddrClonable::Tcp(*x),
+            SomeSocketAddr::Tcp(x) => SomeSocketAddrClonable::Tcp(x),
             #[cfg(all(feature = "unix", unix))]
-            SomeSocketAddr::Unix(x) => SomeSocketAddrClonable::Unix(format!("{:?}", x)),
+            SomeSocketAddr::Unix(x) => SomeSocketAddrClonable::Unix(Arc::new(x)),
             #[cfg(feature = "inetd")]
             SomeSocketAddr::Stdio => SomeSocketAddrClonable::Stdio,
         }
     }
 }
 
-/// Other representation of [`SomeSocketAddr`] with Unix addresses stringified (using Debug representation) to enable cloning
+/// Other representation of [`SomeSocketAddr`] with Arc-wrapped Unix addresses to enable cloning
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 #[allow(missing_docs)]
@@ -1380,7 +1380,7 @@ pub enum SomeSocketAddrClonable {
     Tcp(SocketAddr),
     #[cfg(all(feature = "unix", unix))]
     #[cfg_attr(docsrs_alt, doc(cfg(all(feature = "unix", unix))))]
-    Unix(String),
+    Unix(Arc<tokio::net::unix::SocketAddr>),
     #[cfg(feature = "inetd")]
     #[cfg_attr(docsrs_alt, doc(cfg(feature = "inetd")))]
     Stdio,
@@ -1391,7 +1391,7 @@ impl Display for SomeSocketAddrClonable {
         match self {
             SomeSocketAddrClonable::Tcp(x) => x.fmt(f),
             #[cfg(all(feature = "unix", unix))]
-            SomeSocketAddrClonable::Unix(_x) => write!(f, "unix:{}", _x),
+            SomeSocketAddrClonable::Unix(_x) => write!(f, "unix:{:?}", _x),
             #[cfg(feature = "inetd")]
             SomeSocketAddrClonable::Stdio => "stdio".fmt(f),
         }

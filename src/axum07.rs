@@ -35,14 +35,14 @@ use crate::{is_connection_error, SomeSocketAddr, SomeSocketAddrClonable};
 /// [`IntoMakeServiceWithConnectInfo`]: axum07::extract::connect_info::IntoMakeServiceWithConnectInfo
 #[derive(Debug)]
 pub struct IncomingStream<'a> {
-    tcp_stream: &'a TokioIo<crate::Connection>,
-    remote_addr: SomeSocketAddr,
+    stream: &'a TokioIo<crate::Connection>,
+    remote_addr: SomeSocketAddrClonable,
 }
 
 impl IncomingStream<'_> {
     /// Returns the local address that this stream is bound to.
     pub fn local_addr(&self) -> std::io::Result<SomeSocketAddr> {
-        let q = self.tcp_stream.inner();
+        let q = self.stream.inner();
         if let Some(a) = q.try_borrow_tcp() {
             return Ok(SomeSocketAddr::Tcp(a.local_addr()?));
         }
@@ -61,7 +61,7 @@ impl IncomingStream<'_> {
 
     /// Returns the remote address that this stream is bound to.
     pub fn remote_addr(&self) -> SomeSocketAddrClonable {
-        self.remote_addr.clonable()
+        self.remote_addr.clone()
     }
 }
 
@@ -118,12 +118,12 @@ where
             } = self;
 
             loop {
-                let (tcp_stream, remote_addr) =
+                let (stream, remote_addr) =
                     match tokio_listener_accept(&mut tokio_listener).await {
                         Some(conn) => conn,
                         None => continue,
                     };
-                let tcp_stream = TokioIo::new(tcp_stream);
+                let stream = TokioIo::new(stream);
 
                 poll_fn(|cx| make_service.poll_ready(cx))
                     .await
@@ -131,8 +131,8 @@ where
 
                 let tower_service = make_service
                     .call(IncomingStream {
-                        tcp_stream: &tcp_stream,
-                        remote_addr,
+                        stream: &stream,
+                        remote_addr: remote_addr.clonable(),
                     })
                     .await
                     .unwrap_or_else(|err| match err {});
@@ -144,7 +144,7 @@ where
                 tokio::spawn(async move {
                     match Builder::new(TokioExecutor::new())
                         // upgrades needed for websockets
-                        .serve_connection_with_upgrades(tcp_stream, hyper_service)
+                        .serve_connection_with_upgrades(stream, hyper_service)
                         .await
                     {
                         Ok(()) => {}
@@ -337,7 +337,7 @@ where
 
         private::ServeFuture(Box::pin(async move {
             loop {
-                let (tcp_stream, remote_addr) = tokio::select! {
+                let (stream, remote_addr) = tokio::select! {
                     conn = tokio_listener_accept(&mut tokio_listener) => {
                         match conn {
                             Some(conn) => conn,
@@ -349,7 +349,7 @@ where
                         break;
                     }
                 };
-                let tcp_stream = TokioIo::new(tcp_stream);
+                let stream = TokioIo::new(stream);
 
                 trace!("connection {remote_addr} accepted");
 
@@ -359,8 +359,8 @@ where
 
                 let tower_service = make_service
                     .call(IncomingStream {
-                        tcp_stream: &tcp_stream,
-                        remote_addr,
+                        stream: &stream,
+                        remote_addr: remote_addr.clonable(),
                     })
                     .await
                     .unwrap_or_else(|err| match err {});
@@ -375,7 +375,7 @@ where
 
                 tokio::spawn(async move {
                     let builder = Builder::new(TokioExecutor::new());
-                    let conn = builder.serve_connection_with_upgrades(tcp_stream, hyper_service);
+                    let conn = builder.serve_connection_with_upgrades(stream, hyper_service);
                     pin_mut!(conn);
 
                     let signal_closed = signal_tx.closed().fuse();
