@@ -12,7 +12,7 @@ async fn main() -> anyhow::Result<()> {
 
     let (_health_reporter, health_server) = health_reporter();
 
-    println!("Listening on {:?}", addr);
+    println!("Listening on {addr:?}");
     Server::builder()
         .add_service(health_server)
         .serve_with_incoming(listener)

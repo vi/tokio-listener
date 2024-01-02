@@ -19,7 +19,7 @@ async fn help() -> &'static str {
 async fn conninfo(
     ConnectInfo(addr): ConnectInfo<tokio_listener::SomeSocketAddrClonable>,
 ) -> String {
-    format!("You are connected from {}\n", addr)
+    format!("You are connected from {addr}\n")
 }
 
 #[tokio::main(flavor = "current_thread")]

@@ -51,7 +51,7 @@ impl IncomingStream<'_> {
             return Ok(SomeSocketAddr::Unix(a.local_addr()?));
         }
         #[cfg(feature = "inetd")]
-        if let Some(_) = q.try_borrow_stdio() {
+        if q.try_borrow_stdio().is_some() {
             return Ok(SomeSocketAddr::Stdio);
         }
         Err(std::io::Error::other(
@@ -60,7 +60,7 @@ impl IncomingStream<'_> {
     }
 
     /// Returns the remote address that this stream is bound to.
-    pub fn remote_addr(&self) -> SomeSocketAddrClonable {
+    #[must_use] pub fn remote_addr(&self) -> SomeSocketAddrClonable {
         self.remote_addr.clone()
     }
 }
@@ -93,7 +93,7 @@ where
     S::Future: Send,
 {
     Serve {
-        tokio_listener: tokio_listener,
+        tokio_listener,
         make_service,
         _marker: PhantomData,
     }
@@ -344,7 +344,7 @@ where
                             None => continue,
                         }
                     }
-                    _ = signal_tx.closed() => {
+                    () = signal_tx.closed() => {
                         trace!("signal received, not accepting new connections");
                         break;
                     }
@@ -389,7 +389,7 @@ where
                                 }
                                 break;
                             }
-                            _ = &mut signal_closed => {
+                            () = &mut signal_closed => {
                                 trace!("signal received in task, starting graceful shutdown");
                                 conn.as_mut().graceful_shutdown();
                             }

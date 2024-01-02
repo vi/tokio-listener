@@ -1,5 +1,6 @@
 #![cfg_attr(docsrs_alt, feature(doc_cfg))]
 #![warn(missing_docs)]
+#![allow(clippy::useless_conversion)]
 //! Library for abstracting over TCP server sockets, UNIX server sockets, inetd-like mode.
 //!
 //! [`ListenerAddress`] is like `SocketAddr` and [`Listener`] is like `TcpListener`, but with more flexibility.
@@ -190,6 +191,7 @@ impl Display for TcpKeepaliveParams {
 impl FromStr for TcpKeepaliveParams {
     type Err = &'static str;
 
+    #[allow(clippy::get_first)]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let chunks: Vec<&str> = s.split(':').collect();
         if chunks.len() > 3 {
@@ -205,16 +207,16 @@ impl FromStr for TcpKeepaliveParams {
             k.timeout_ms = Some(
                 t.parse()
                     .map_err(|_| "failed to parse timeout as a number")?,
-            )
+            );
         }
         if !n.is_empty() {
-            k.count = Some(n.parse().map_err(|_| "failed to parse count as a number")?)
+            k.count = Some(n.parse().map_err(|_| "failed to parse count as a number")?);
         }
         if !i.is_empty() {
             k.interval_ms = Some(
                 i.parse()
                     .map_err(|_| "failed to parse interval as a number")?,
-            )
+            );
         }
 
         Ok(k)
@@ -225,11 +227,11 @@ impl TcpKeepaliveParams {
     /// Attempt to convert values of this struct to socket2 format.
     ///
     /// Some fields may be ignored depending on platform.
-    pub fn to_socket2(&self) -> socket2::TcpKeepalive {
+    #[must_use] pub fn to_socket2(&self) -> socket2::TcpKeepalive {
         let mut k = socket2::TcpKeepalive::new();
 
         if let Some(x) = self.timeout_ms {
-            k = k.with_time(Duration::from_millis(x as u64));
+            k = k.with_time(Duration::from_millis(u64::from(x)));
         }
 
         #[cfg(any(
@@ -246,7 +248,7 @@ impl TcpKeepaliveParams {
             target_os = "watchos",
         ))]
         if let Some(x) = self.count {
-            k = k.with_retries(x)
+            k = k.with_retries(x);
         }
 
         #[cfg(any(
@@ -264,7 +266,7 @@ impl TcpKeepaliveParams {
             target_os = "windows",
         ))]
         if let Some(x) = self.interval_ms {
-            k = k.with_interval(Duration::from_millis(x as u64));
+            k = k.with_interval(Duration::from_millis(u64::from(x)));
         }
 
         k
@@ -382,7 +384,7 @@ pub struct UserOptions {
 ///
 /// If serde is enabled, it is serialized/deserialized the same as string, same as as in the CLI, using `FromStr`/`Display`.
 ///
-/// See variants documentation for FromStr string patterns that are accepted by ListenerAddress parser
+/// See variants documentation for `FromStr` string patterns that are accepted by `ListenerAddress` parser
 ///
 /// If you are not using clap helper types then remember to copy or link those documentation snippets into your app's documentation.
 ///
@@ -567,10 +569,10 @@ impl FromStr for ListenerAddress {
     type Err = &'static str;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.starts_with("/") || s.starts_with("./") {
+        if s.starts_with('/') || s.starts_with("./") {
             Ok(ListenerAddress::Path(s.into()))
-        } else if s.starts_with('@') {
-            Ok(ListenerAddress::Abstract(s[1..].to_owned()))
+        } else if let Some(x) = s.strip_prefix('@') {
+            Ok(ListenerAddress::Abstract(x.to_owned()))
         } else if s.eq_ignore_ascii_case("inetd") || s.eq_ignore_ascii_case("stdio") || s == "-" {
             Ok(ListenerAddress::Inetd)
         } else if s.eq_ignore_ascii_case("sd-listen") || s.eq_ignore_ascii_case("sd_listen") {
@@ -593,21 +595,15 @@ impl Display for ListenerAddress {
             ListenerAddress::Tcp(a) => a.fmt(f),
             ListenerAddress::Path(p) => {
                 if let Some(s) = p.to_str() {
-                    if p.is_absolute() {
+                    if p.is_absolute() || s.starts_with("./") {
                         s.fmt(f)
                     } else {
-                        if s.starts_with("./") {
-                            s.fmt(f)
-                        } else {
-                            write!(f, "./{s}")
-                        }
+                        write!(f, "./{s}")
                     }
+                } else if p.is_absolute() {
+                    "/???".fmt(f)
                 } else {
-                    if p.is_absolute() {
-                        "/???".fmt(f)
-                    } else {
-                        "./???".fmt(f)
-                    }
+                    "./???".fmt(f)
                 }
             }
             ListenerAddress::Abstract(p) => {
@@ -618,14 +614,14 @@ impl Display for ListenerAddress {
                 if *fd == SD_LISTEN_FDS_START as i32 {
                     "sd-listen".fmt(f)
                 } else {
-                    write!(f, "accept-tcp-from-fd:{}", fd)
+                    write!(f, "accept-tcp-from-fd:{fd}")
                 }
             }
             ListenerAddress::FromFdUnix(fd) => {
                 if *fd == SD_LISTEN_FDS_START as i32 {
                     "sd-listen-unix".fmt(f)
                 } else {
-                    write!(f, "accept-unix-from-fd:{}", fd)
+                    write!(f, "accept-unix-from-fd:{fd}")
                 }
             }
         }
@@ -646,7 +642,7 @@ pub struct SystemOptions {
     pub nodelay: bool,
 }
 
-/// Configured TCP. AF_UNIX or other stream socket acceptor.
+/// Configured TCP. `AF_UNIX` or other stream socket acceptor.
 ///
 /// Based on extended hyper 0.14's `AddrIncoming` code.
 pub struct Listener {
@@ -746,13 +742,14 @@ impl Listener {
             #[cfg(all(unix, feature = "unix"))]
             ListenerAddress::Path(p) => {
                 #[cfg(feature = "unix_path_tools")]
+                #[allow(clippy::collapsible_if)]
                 if uopts.unix_listen_unlink {
-                    if std::fs::remove_file(&p).is_ok() {
-                        debug!(file=?p, "removed UNIX socket before listening")
+                    if std::fs::remove_file(p).is_ok() {
+                        debug!(file=?p, "removed UNIX socket before listening");
                     }
                 }
                 let i = ListenerImpl::Unix {
-                    s: UnixListener::bind(&p)?,
+                    s: UnixListener::bind(p)?,
                     #[cfg(feature = "socket_options")]
                     recv_buffer_size: uopts.recv_buffer_size,
                     #[cfg(feature = "socket_options")]
@@ -768,7 +765,7 @@ impl Listener {
                         };
                         use std::os::unix::fs::PermissionsExt;
                         let perms = std::fs::Permissions::from_mode(mode);
-                        std::fs::set_permissions(&p, perms)?;
+                        std::fs::set_permissions(p, perms)?;
                     }
                     if (uopts.unix_listen_uid, uopts.unix_listen_gid) != (None, None) {
                         let uid = uopts.unix_listen_uid.map(Into::into);
@@ -805,13 +802,11 @@ impl Listener {
             }
             #[cfg(all(feature = "sd_listen", unix))]
             ListenerAddress::FromFdTcp(fdnum) => {
-                if !uopts.sd_accept_ignore_environment {
-                    if check_env_for_fd(*fdnum).is_none() {
-                        return Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            "Failed LISTEN_PID or LISTEN_FDS environment check for sd-listen mode",
-                        ));
-                    }
+                if !uopts.sd_accept_ignore_environment && check_env_for_fd(*fdnum).is_none() {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        "Failed LISTEN_PID or LISTEN_FDS environment check for sd-listen mode",
+                    ));
                 }
                 let fd: RawFd = (*fdnum).into();
                 use std::os::fd::FromRawFd;
@@ -836,13 +831,11 @@ impl Listener {
             }
             #[cfg(all(feature = "sd_listen", feature = "unix", unix))]
             ListenerAddress::FromFdUnix(fdnum) => {
-                if !uopts.sd_accept_ignore_environment {
-                    if check_env_for_fd(*fdnum).is_none() {
-                        return Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            "Failed LISTEN_PID or LISTEN_FDS environment check for sd-listen mode",
-                        ));
-                    }
+                if !uopts.sd_accept_ignore_environment && check_env_for_fd(*fdnum).is_none() {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        "Failed LISTEN_PID or LISTEN_FDS environment check for sd-listen mode",
+                    ));
                 }
                 let fd: RawFd = (*fdnum).into();
                 use std::os::fd::FromRawFd;
@@ -952,7 +945,7 @@ impl Listener {
         } else {
             false
         };
-        return false;
+        false
     }
 
     /// See main [`Listener::bind`] documentation for specifics of how it accepts connections
@@ -1294,7 +1287,7 @@ impl AsyncWrite for Connection {
                         if tx.send(()).is_err() {
                             warn!("stdout wrapper for inetd mode failed to notify the listener to abort listening loop");
                         } else {
-                            debug!("stdout finished in inetd mode. Aborting the listening loop.")
+                            debug!("stdout finished in inetd mode. Aborting the listening loop.");
                         }
                     }
                     Poll::Ready(ret)
@@ -1361,7 +1354,7 @@ impl Display for SomeSocketAddr {
 impl SomeSocketAddr {
     /// Convert this address representation into a clonable form.
     /// For UNIX socket addresses, it converts them to a string using Debug representation.
-    pub fn clonable(self) -> SomeSocketAddrClonable {
+    #[must_use] pub fn clonable(self) -> SomeSocketAddrClonable {
         match self {
             SomeSocketAddr::Tcp(x) => SomeSocketAddrClonable::Tcp(x),
             #[cfg(all(feature = "unix", unix))]
@@ -1391,7 +1384,7 @@ impl Display for SomeSocketAddrClonable {
         match self {
             SomeSocketAddrClonable::Tcp(x) => x.fmt(f),
             #[cfg(all(feature = "unix", unix))]
-            SomeSocketAddrClonable::Unix(_x) => write!(f, "unix:{:?}", _x),
+            SomeSocketAddrClonable::Unix(_x) => write!(f, "unix:{_x:?}"),
             #[cfg(feature = "inetd")]
             SomeSocketAddrClonable::Stdio => "stdio".fmt(f),
         }
@@ -1454,7 +1447,7 @@ mod tonic010 {
 
     #[derive(Clone)]
     pub enum ListenerConnectInfo {
-        TCP(TcpConnectInfo),
+        Tcp(TcpConnectInfo),
         Unix(UdsConnectInfo),
         Stdio,
         Other,
@@ -1465,14 +1458,14 @@ mod tonic010 {
 
         fn connect_info(&self) -> Self::ConnectInfo {
             if let Some(tcp_stream) = self.try_borrow_tcp() {
-                return ListenerConnectInfo::TCP(tcp_stream.connect_info());
+                return ListenerConnectInfo::Tcp(tcp_stream.connect_info());
             }
             #[cfg(all(feature = "unix", unix))]
             if let Some(unix_stream) = self.try_borrow_unix() {
                 return ListenerConnectInfo::Unix(unix_stream.connect_info())
             }
             #[cfg(feature = "inetd")]
-            if let Some(_) = self.try_borrow_stdio() {
+            if self.try_borrow_stdio().is_some() {
                 return ListenerConnectInfo::Stdio;
             }
 
