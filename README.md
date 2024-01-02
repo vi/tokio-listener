@@ -16,24 +16,24 @@ While it is a solid default choice, sometimes more flexibility is desired, espec
 
 ## Other 
 
-* Compatibility with usual `SocketAddr` - existing invocations would still lead to a usual TCP server socket.
 * Portability - tricky features are not compiled on platforms which do not support them
 * `clap` integration - custom address can be added as a Clap field (due to FromStr impl). Other options can be included by `clap(flatten)`, which also brings short documentation to the CLI help message. Alternatively, the whole set of primary address and additional options can be brought in using `ListenerAddressPositional` or `ListenerAddressLFlag` helper types.
 * `serde` intergration - custom address type behaves like a string with respect to Serde. Other options can also be serialized or deserialized.
 * For UNIX path sockets, it supports unlinking, chowning and chmodding the file per user request.
+* `axum 0.7` integration.
 
 # Examples
 
-* `clap_axum` - simplest, most straighforward example. Uses Clap as CLI framework and Axum as web framework.
-* `argh_hyper` - demonstrages how to use non-clap CLI parser. Also uses `hyper` directly instead of Axum.
-* `serde_echo` - demonstrates that listening configuration can also be specified using e.g. toml file. Is not a web service, but an echo server.
+* clap_axum - simplest, most straighforward example. Uses Clap as CLI framework and Axum as web framework. There are two versions of the example: one for Axum 0.6, the other for Axum 0.7.
+* argh_hyper - demonstrages how to use non-clap CLI parser. Also uses `hyper` directly instead of Axum.
+* serde_echo - demonstrates that listening configuration can also be specified using e.g. toml file. Is not a web service, but an echo server.
 
 See [crate docs](https://docs.rs/tokio-listener) for API reference and some other examples.
 
 # Limitations
 
 * There is no support of SEQPACKET or DGRAM sockets.
-* It may be slower that just using TcpListener directly, as each send or recv needs to go though a wrapper.
+* It may be slower that just using TcpListener directly, as each send or recv needs to go though a wrapper. This slowdown should disappear if you disable UNIX and inetd modes at compilation time.
 * Specifying non-UTF8-compatible paths for UNIX sockets is not supported.
 
 # Example session
