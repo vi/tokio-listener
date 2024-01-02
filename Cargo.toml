@@ -1,9 +1,9 @@
 [package]
 name = "tokio-listener"
-version = "0.2.3"
+version = "0.3.0"
 edition = "2021"
 repository = "https://github.com/vi/tokio-listener"
-license = "MIT/Apache-2.0"
+license = "MIT OR Apache-2.0"
 description = "Add flexibility in a way of accepting connections: unix sockets, socket activation, inetd mode to Tokio-based projects."
 categories = ["network-programming", "command-line-interface"]
 keywords = ["tokio","unix", "systemd", "socket-activation", "clap"]
@@ -39,7 +39,7 @@ nix = { version = "0.26.2", default-features = false, features = ["user", "fs"],
 
 
 [features]
-default = ["hyper014", "user_facing_default"]
+default = ["user_facing_default", "tokio-util"]
 
 ## Subset of default features that add features supposed to be accessed by end user
 user_facing_default = ["inetd", "unix", "unix_path_tools", "sd_listen", "socket_options"]
