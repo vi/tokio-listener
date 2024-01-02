@@ -41,6 +41,7 @@ pub struct IncomingStream<'a> {
 
 impl IncomingStream<'_> {
     /// Returns the local address that this stream is bound to.
+    #[allow(clippy::missing_errors_doc)]
     pub fn local_addr(&self) -> std::io::Result<SomeSocketAddr> {
         let q = self.stream.inner();
         if let Some(a) = q.try_borrow_tcp() {
@@ -60,7 +61,8 @@ impl IncomingStream<'_> {
     }
 
     /// Returns the remote address that this stream is bound to.
-    #[must_use] pub fn remote_addr(&self) -> SomeSocketAddrClonable {
+    #[must_use]
+    pub fn remote_addr(&self) -> SomeSocketAddrClonable {
         self.remote_addr.clone()
     }
 }

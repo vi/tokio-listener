@@ -60,13 +60,15 @@
 )]
 
 use std::{
+    ffi::c_int,
     fmt::Display,
     net::SocketAddr,
     path::PathBuf,
     pin::Pin,
     str::FromStr,
+    sync::Arc,
     task::{ready, Context, Poll},
-    time::Duration, ffi::c_int, sync::Arc,
+    time::Duration,
 };
 
 #[cfg(unix)]
@@ -192,34 +194,40 @@ impl FromStr for TcpKeepaliveParams {
     type Err = &'static str;
 
     #[allow(clippy::get_first)]
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let chunks: Vec<&str> = s.split(':').collect();
-        if chunks.len() > 3 {
+    fn from_str(input_string: &str) -> Result<Self, Self::Err> {
+        let input_chunks: Vec<&str> = input_string.split(':').collect();
+        if input_chunks.len() > 3 {
             return Err("Too many colon-separated chunks");
         }
-        let t = chunks.get(0).unwrap_or(&"").trim();
-        let n = chunks.get(1).unwrap_or(&"").trim();
-        let i = chunks.get(2).unwrap_or(&"").trim();
+        let timeout_chunk = input_chunks.get(0).unwrap_or(&"").trim();
+        let ping_count_chunk = input_chunks.get(1).unwrap_or(&"").trim();
+        let interval_chunk = input_chunks.get(2).unwrap_or(&"").trim();
 
-        let mut k = TcpKeepaliveParams::default();
+        let mut ka_params = TcpKeepaliveParams::default();
 
-        if !t.is_empty() {
-            k.timeout_ms = Some(
-                t.parse()
+        if !timeout_chunk.is_empty() {
+            ka_params.timeout_ms = Some(
+                timeout_chunk
+                    .parse()
                     .map_err(|_| "failed to parse timeout as a number")?,
             );
         }
-        if !n.is_empty() {
-            k.count = Some(n.parse().map_err(|_| "failed to parse count as a number")?);
+        if !ping_count_chunk.is_empty() {
+            ka_params.count = Some(
+                ping_count_chunk
+                    .parse()
+                    .map_err(|_| "failed to parse count as a number")?,
+            );
         }
-        if !i.is_empty() {
-            k.interval_ms = Some(
-                i.parse()
+        if !interval_chunk.is_empty() {
+            ka_params.interval_ms = Some(
+                interval_chunk
+                    .parse()
                     .map_err(|_| "failed to parse interval as a number")?,
             );
         }
 
-        Ok(k)
+        Ok(ka_params)
     }
 }
 #[cfg(feature = "socket_options")]
@@ -227,7 +235,8 @@ impl TcpKeepaliveParams {
     /// Attempt to convert values of this struct to socket2 format.
     ///
     /// Some fields may be ignored depending on platform.
-    #[must_use] pub fn to_socket2(&self) -> socket2::TcpKeepalive {
+    #[must_use]
+    pub fn to_socket2(&self) -> socket2::TcpKeepalive {
         let mut k = socket2::TcpKeepalive::new();
 
         if let Some(x) = self.timeout_ms {
@@ -275,6 +284,7 @@ impl TcpKeepaliveParams {
 
 #[cfg_attr(feature = "clap", derive(clap::Args))]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Default)]
 #[non_exhaustive]
 /// User options that supplement listening address.
@@ -334,7 +344,7 @@ pub struct UserOptions {
     #[cfg(feature = "socket_options")]
     #[cfg_attr(docsrs_alt, doc(cfg(feature = "socket_options")))]
     /// set SO_KEEPALIVE settings for each accepted TCP connection.
-    /// 
+    ///
     /// Value is a colon-separated triplet of time_ms:count:interval_ms, each of which is optional.
     #[cfg_attr(feature = "clap", clap(long))]
     #[cfg_attr(feature = "serde", serde(default))]
@@ -531,6 +541,7 @@ mod claptools {
     }
 
     impl ListenerAddressPositional {
+        #[allow(clippy::missing_errors_doc)]
         /// Simple function to activate the listener without any extra parameters (just as nodelay, retries or keepalives) based on supplied arguments.
         pub async fn bind(&self) -> std::io::Result<crate::Listener> {
             crate::Listener::bind(
@@ -563,7 +574,7 @@ mod claptools {
 #[cfg(feature = "clap")]
 pub use claptools::{ListenerAddressLFlag, ListenerAddressPositional};
 
-const SD_LISTEN_FDS_START: u32 = 3;
+const SD_LISTEN_FDS_START: i32 = 3;
 
 impl FromStr for ListenerAddress {
     type Err = &'static str;
@@ -576,11 +587,11 @@ impl FromStr for ListenerAddress {
         } else if s.eq_ignore_ascii_case("inetd") || s.eq_ignore_ascii_case("stdio") || s == "-" {
             Ok(ListenerAddress::Inetd)
         } else if s.eq_ignore_ascii_case("sd-listen") || s.eq_ignore_ascii_case("sd_listen") {
-            Ok(ListenerAddress::FromFdTcp(SD_LISTEN_FDS_START as i32))
+            Ok(ListenerAddress::FromFdTcp(SD_LISTEN_FDS_START))
         } else if s.eq_ignore_ascii_case("sd-listen-unix")
             || s.eq_ignore_ascii_case("sd_listen_unix")
         {
-            Ok(ListenerAddress::FromFdUnix(SD_LISTEN_FDS_START as i32))
+            Ok(ListenerAddress::FromFdUnix(SD_LISTEN_FDS_START))
         } else if let Ok(a) = s.parse() {
             Ok(ListenerAddress::Tcp(a))
         } else {
@@ -611,14 +622,14 @@ impl Display for ListenerAddress {
             }
             ListenerAddress::Inetd => "inetd".fmt(f),
             ListenerAddress::FromFdTcp(fd) => {
-                if *fd == SD_LISTEN_FDS_START as i32 {
+                if *fd == SD_LISTEN_FDS_START {
                     "sd-listen".fmt(f)
                 } else {
                     write!(f, "accept-tcp-from-fd:{fd}")
                 }
             }
             ListenerAddress::FromFdUnix(fd) => {
-                if *fd == SD_LISTEN_FDS_START as i32 {
+                if *fd == SD_LISTEN_FDS_START {
                     "sd-listen-unix".fmt(f)
                 } else {
                     write!(f, "accept-unix-from-fd:{fd}")
@@ -671,7 +682,7 @@ fn check_env_for_fd(fdnum: i32) -> Option<()> {
     let listen_pid: u32 = listen_pid.parse().ok()?;
 
     let listen_fds = std::env::var("LISTEN_FDS").ok()?;
-    let listen_fds: u32 = listen_fds.parse().ok()?;
+    let listen_fds: i32 = listen_fds.parse().ok()?;
 
     debug!("Parsed LISTEN_PID and LISTEN_FDS");
 
@@ -680,7 +691,7 @@ fn check_env_for_fd(fdnum: i32) -> Option<()> {
         return None;
     }
 
-    if fdnum < SD_LISTEN_FDS_START as i32 || fdnum >= (SD_LISTEN_FDS_START + listen_fds) as i32 {
+    if fdnum < SD_LISTEN_FDS_START || fdnum >= SD_LISTEN_FDS_START.checked_add(listen_fds)? {
         error!(fdnum, listen_fds, "Failed LISTEN_FDS check");
         return None;
     }
@@ -688,7 +699,166 @@ fn check_env_for_fd(fdnum: i32) -> Option<()> {
     Some(())
 }
 
+async fn listen_tcp(
+    a: &SocketAddr,
+    usr_opts: &UserOptions,
+    sys_opts: &SystemOptions,
+) -> Result<ListenerImpl, std::io::Error> {
+    #[cfg(not(feature = "socket_options"))]
+    let s = TcpListener::bind(a).await?;
+    #[cfg(feature = "socket_options")]
+    let s =
+        if usr_opts.tcp_only_v6 || usr_opts.tcp_reuse_port || usr_opts.tcp_listen_backlog.is_some()
+        {
+            let s = socket2::Socket::new(
+                socket2::Domain::for_address(*a),
+                socket2::Type::STREAM,
+                None,
+            )?;
+            if usr_opts.tcp_only_v6 {
+                s.set_only_v6(true)?;
+            }
+            #[cfg(all(unix, not(any(target_os = "solaris", target_os = "illumos"))))]
+            if usr_opts.tcp_reuse_port {
+                s.set_reuse_port(true)?;
+            }
+            s.bind(&socket2::SockAddr::from(*a))?;
+            let backlog = usr_opts.tcp_listen_backlog.unwrap_or(1024);
+            let Ok(backlog): Result<c_int, _> = backlog.try_into() else {
+                return Err(std::io::Error::other("Invalid socket listen backlog value"));
+            };
+            s.listen(backlog)?;
+            s.set_nonblocking(true)?;
+            TcpListener::from_std(std::net::TcpListener::from(s))?
+        } else {
+            TcpListener::bind(a).await?
+        };
+    Ok(ListenerImpl::Tcp(ListenerImplTcp {
+        s,
+        nodelay: sys_opts.nodelay,
+        #[cfg(feature = "socket_options")]
+        keepalive: usr_opts
+            .tcp_keepalive
+            .as_ref()
+            .map(TcpKeepaliveParams::to_socket2),
+        #[cfg(feature = "socket_options")]
+        recv_buffer_size: usr_opts.recv_buffer_size,
+        #[cfg(feature = "socket_options")]
+        send_buffer_size: usr_opts.send_buffer_size,
+    }))
+}
+
+#[cfg(all(unix, feature = "unix"))]
+#[allow(clippy::similar_names)]
+fn listen_path(usr_opts: &UserOptions, p: &PathBuf) -> Result<ListenerImpl, std::io::Error> {
+    #[cfg(feature = "unix_path_tools")]
+    #[allow(clippy::collapsible_if)]
+    if usr_opts.unix_listen_unlink {
+        if std::fs::remove_file(p).is_ok() {
+            debug!(file=?p, "removed UNIX socket before listening");
+        }
+    }
+    let i = ListenerImpl::Unix(ListenerImplUnix {
+        s: UnixListener::bind(p)?,
+        #[cfg(feature = "socket_options")]
+        recv_buffer_size: usr_opts.recv_buffer_size,
+        #[cfg(feature = "socket_options")]
+        send_buffer_size: usr_opts.send_buffer_size,
+    });
+    #[cfg(feature = "unix_path_tools")]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Some(chmod) = usr_opts.unix_listen_chmod {
+            let mode = match chmod {
+                UnixChmodVariant::Owner => 0o006,
+                UnixChmodVariant::Group => 0o066,
+                UnixChmodVariant::Everybody => 0o666,
+            };
+            let perms = std::fs::Permissions::from_mode(mode);
+            std::fs::set_permissions(p, perms)?;
+        }
+        if (usr_opts.unix_listen_uid, usr_opts.unix_listen_gid) != (None, None) {
+            let uid = usr_opts.unix_listen_uid.map(Into::into);
+            let gid = usr_opts.unix_listen_gid.map(Into::into);
+            nix::unistd::chown(p, uid, gid)?;
+        }
+    }
+    Ok(i)
+}
+
+#[cfg(all(feature = "unix", any(target_os = "linux", target_os = "android")))]
+fn listen_abstract(a: &String, usr_opts: &UserOptions) -> Result<ListenerImpl, std::io::Error> {
+    #[cfg(target_os = "android")]
+    use std::os::android::net::SocketAddrExt;
+    #[cfg(target_os = "linux")]
+    use std::os::linux::net::SocketAddrExt;
+    let a = std::os::unix::net::SocketAddr::from_abstract_name(a)?;
+    let s = std::os::unix::net::UnixListener::bind_addr(&a)?;
+    s.set_nonblocking(true)?;
+    Ok(ListenerImpl::Unix(ListenerImplUnix {
+        s: UnixListener::from_std(s)?,
+        #[cfg(feature = "socket_options")]
+        recv_buffer_size: usr_opts.recv_buffer_size,
+        #[cfg(feature = "socket_options")]
+        send_buffer_size: usr_opts.send_buffer_size,
+    }))
+}
+
+#[cfg(all(feature = "sd_listen", unix))]
+fn listen_from_fd_tcp(
+    usr_opts: &UserOptions,
+    fdnum: i32,
+    sys_opts: SystemOptions,
+) -> Result<ListenerImpl, std::io::Error> {
+    use std::os::fd::FromRawFd;
+    if !usr_opts.sd_accept_ignore_environment && check_env_for_fd(fdnum).is_none() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Failed LISTEN_PID or LISTEN_FDS environment check for sd-listen mode",
+        ));
+    }
+    let fd: RawFd = (fdnum).into();
+    let s = unsafe { std::net::TcpListener::from_raw_fd(fd) };
+    s.set_nonblocking(true)?;
+    Ok(ListenerImpl::Tcp(ListenerImplTcp {
+        s: TcpListener::from_std(s)?,
+        nodelay: sys_opts.nodelay,
+        #[cfg(feature = "socket_options")]
+        keepalive: usr_opts
+            .tcp_keepalive
+            .as_ref()
+            .map(TcpKeepaliveParams::to_socket2),
+        #[cfg(feature = "socket_options")]
+        recv_buffer_size: usr_opts.recv_buffer_size,
+        #[cfg(feature = "socket_options")]
+        send_buffer_size: usr_opts.send_buffer_size,
+    }))
+}
+
+#[cfg(all(feature = "sd_listen", feature = "unix", unix))]
+fn listen_from_fd_unix(usr_opts: &UserOptions, fdnum: i32) -> Result<ListenerImpl, std::io::Error> {
+    use std::os::fd::FromRawFd;
+    if !usr_opts.sd_accept_ignore_environment && check_env_for_fd(fdnum).is_none() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Failed LISTEN_PID or LISTEN_FDS environment check for sd-listen mode",
+        ));
+    }
+    let fd: RawFd = (fdnum).into();
+    let s = unsafe { std::os::unix::net::UnixListener::from_raw_fd(fd) };
+    s.set_nonblocking(true)?;
+    Ok(ListenerImpl::Unix(ListenerImplUnix {
+        s: UnixListener::from_std(s)?,
+        #[cfg(feature = "socket_options")]
+        send_buffer_size: usr_opts.send_buffer_size,
+
+        #[cfg(feature = "socket_options")]
+        recv_buffer_size: usr_opts.recv_buffer_size,
+    }))
+}
+
 impl Listener {
+    #[allow(clippy::missing_errors_doc)]
     /// Creates listener corresponding specified to tokio-listener address and options.
     ///
     /// * For TCP addresses it tries to behave close to hyper 0.14's listener
@@ -702,96 +872,15 @@ impl Listener {
     /// Binding may fail due to unsupported address type, e.g. if trying to use UNIX addresses on Windows or abstract-namespaces sockets on Mac.
     pub async fn bind(
         addr: &ListenerAddress,
-        sopts: &SystemOptions,
-        uopts: &UserOptions,
+        sys_opts: &SystemOptions,
+        usr_opts: &UserOptions,
     ) -> std::io::Result<Self> {
         let i: ListenerImpl = match addr {
-            ListenerAddress::Tcp(a) => {
-                #[cfg(not(feature="socket_options"))]
-                let s = TcpListener::bind(a).await?;
-                #[cfg(feature="socket_options")]
-                let s = if uopts.tcp_only_v6 || uopts.tcp_reuse_port || uopts.tcp_listen_backlog.is_some() {
-                    let s = socket2::Socket::new(socket2::Domain::for_address(*a), socket2::Type::STREAM, None)?;
-                    if uopts.tcp_only_v6 {
-                        s.set_only_v6(true)?;
-                    }
-                    #[cfg(all(unix,not(any(target_os = "solaris", target_os = "illumos"))))]
-                    if uopts.tcp_reuse_port {
-                        s.set_reuse_port(true)?;
-                    }
-                    s.bind(&socket2::SockAddr::from(*a))?;
-                    s.listen(uopts.tcp_listen_backlog.unwrap_or(1024) as c_int)?;
-                    s.set_nonblocking(true)?;
-                    TcpListener::from_std(std::net::TcpListener::from(s))?
-                } else {
-                    TcpListener::bind(a).await?
-                };
-                ListenerImpl::Tcp {
-                s,
-                nodelay: sopts.nodelay,
-                #[cfg(feature = "socket_options")]
-                keepalive: uopts
-                    .tcp_keepalive
-                    .as_ref()
-                    .map(TcpKeepaliveParams::to_socket2),
-                #[cfg(feature = "socket_options")]
-                recv_buffer_size: uopts.recv_buffer_size,
-                #[cfg(feature = "socket_options")]
-                send_buffer_size: uopts.send_buffer_size,
-            }},
+            ListenerAddress::Tcp(a) => listen_tcp(a, usr_opts, sys_opts).await?,
             #[cfg(all(unix, feature = "unix"))]
-            ListenerAddress::Path(p) => {
-                #[cfg(feature = "unix_path_tools")]
-                #[allow(clippy::collapsible_if)]
-                if uopts.unix_listen_unlink {
-                    if std::fs::remove_file(p).is_ok() {
-                        debug!(file=?p, "removed UNIX socket before listening");
-                    }
-                }
-                let i = ListenerImpl::Unix {
-                    s: UnixListener::bind(p)?,
-                    #[cfg(feature = "socket_options")]
-                    recv_buffer_size: uopts.recv_buffer_size,
-                    #[cfg(feature = "socket_options")]
-                    send_buffer_size: uopts.send_buffer_size,
-                };
-                #[cfg(feature = "unix_path_tools")]
-                {
-                    if let Some(chmod) = uopts.unix_listen_chmod {
-                        let mode = match chmod {
-                            UnixChmodVariant::Owner => 0o006,
-                            UnixChmodVariant::Group => 0o066,
-                            UnixChmodVariant::Everybody => 0o666,
-                        };
-                        use std::os::unix::fs::PermissionsExt;
-                        let perms = std::fs::Permissions::from_mode(mode);
-                        std::fs::set_permissions(p, perms)?;
-                    }
-                    if (uopts.unix_listen_uid, uopts.unix_listen_gid) != (None, None) {
-                        let uid = uopts.unix_listen_uid.map(Into::into);
-                        let gid = uopts.unix_listen_gid.map(Into::into);
-                        nix::unistd::chown(p, uid, gid)?;
-                    }
-                }
-                i
-            }
+            ListenerAddress::Path(p) => listen_path(usr_opts, p)?,
             #[cfg(all(feature = "unix", any(target_os = "linux", target_os = "android")))]
-            ListenerAddress::Abstract(a) => {
-                #[cfg(target_os = "linux")]
-                use std::os::linux::net::SocketAddrExt;
-                #[cfg(target_os = "android")]
-                use std::os::android::net::SocketAddrExt;
-                let a = std::os::unix::net::SocketAddr::from_abstract_name(a)?;
-                let s = std::os::unix::net::UnixListener::bind_addr(&a)?;
-                s.set_nonblocking(true)?;
-                ListenerImpl::Unix {
-                    s: UnixListener::from_std(s)?,
-                    #[cfg(feature = "socket_options")]
-                    recv_buffer_size: uopts.recv_buffer_size,
-                    #[cfg(feature = "socket_options")]
-                    send_buffer_size: uopts.send_buffer_size,
-                }
-            }
+            ListenerAddress::Abstract(a) => listen_abstract(a, usr_opts)?,
             #[cfg(feature = "inetd")]
             ListenerAddress::Inetd => {
                 let (tx, rx) = channel();
@@ -801,57 +890,9 @@ impl Listener {
                 })
             }
             #[cfg(all(feature = "sd_listen", unix))]
-            ListenerAddress::FromFdTcp(fdnum) => {
-                if !uopts.sd_accept_ignore_environment && check_env_for_fd(*fdnum).is_none() {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        "Failed LISTEN_PID or LISTEN_FDS environment check for sd-listen mode",
-                    ));
-                }
-                let fd: RawFd = (*fdnum).into();
-                use std::os::fd::FromRawFd;
-
-                // Safety: we assume end user is reasonable and won't specify too tricky file descriptor numbers.
-                // Besides checking systemd's environment variables, we can't do much to prevent misuse anyway.
-                let s = unsafe { std::net::TcpListener::from_raw_fd(fd) };
-                s.set_nonblocking(true)?;
-                ListenerImpl::Tcp {
-                    s: TcpListener::from_std(s)?,
-                    nodelay: sopts.nodelay,
-                    #[cfg(feature = "socket_options")]
-                    keepalive: uopts
-                        .tcp_keepalive
-                        .as_ref()
-                        .map(TcpKeepaliveParams::to_socket2),
-                    #[cfg(feature = "socket_options")]
-                    recv_buffer_size: uopts.recv_buffer_size,
-                    #[cfg(feature = "socket_options")]
-                    send_buffer_size: uopts.send_buffer_size,
-                }
-            }
+            ListenerAddress::FromFdTcp(fdnum) => listen_from_fd_tcp(usr_opts, *fdnum, *sys_opts)?,
             #[cfg(all(feature = "sd_listen", feature = "unix", unix))]
-            ListenerAddress::FromFdUnix(fdnum) => {
-                if !uopts.sd_accept_ignore_environment && check_env_for_fd(*fdnum).is_none() {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        "Failed LISTEN_PID or LISTEN_FDS environment check for sd-listen mode",
-                    ));
-                }
-                let fd: RawFd = (*fdnum).into();
-                use std::os::fd::FromRawFd;
-                // Safety: we assume end user is reasonable and won't specify too tricky file descriptor numbers.
-                // Besides checking systemd's environment variables, we can't do much to prevent misuse anyway.
-                let s = unsafe { std::os::unix::net::UnixListener::from_raw_fd(fd) };
-                s.set_nonblocking(true)?;
-                ListenerImpl::Unix {
-                    s: UnixListener::from_std(s)?,
-                    #[cfg(feature = "socket_options")]
-                    send_buffer_size: uopts.send_buffer_size,
-
-                    #[cfg(feature = "socket_options")]
-                    recv_buffer_size: uopts.recv_buffer_size,
-                }
-            }
+            ListenerAddress::FromFdUnix(fdnum) => listen_from_fd_unix(usr_opts, *fdnum)?,
             #[allow(unreachable_patterns)]
             _ => {
                 return Err(std::io::Error::new(
@@ -862,7 +903,7 @@ impl Listener {
         };
         Ok(Listener {
             i,
-            sleep_on_errors: sopts.sleep_on_errors,
+            sleep_on_errors: sys_opts.sleep_on_errors,
             timeout: None,
         })
     }
@@ -874,63 +915,196 @@ struct StdioListener {
     token: Option<Sender<()>>,
 }
 
+#[cfg(feature = "inetd")]
+impl StdioListener {
+    fn poll_accept(
+        &mut self,
+        cx: &mut Context<'_>,
+    ) -> Poll<std::io::Result<(Connection, SomeSocketAddr)>> {
+        match self.token.take() {
+            Some(tx) => {
+                debug!(r#type = "stdio", "incoming connection");
+                Poll::Ready(Ok((
+                    Connection(ConnectionImpl::Stdio(
+                        tokio::io::stdin(),
+                        tokio::io::stdout(),
+                        Some(tx),
+                    )),
+                    SomeSocketAddr::Stdio,
+                )))
+            }
+            None => match Pin::new(&mut self.rx).poll(cx) {
+                Poll::Ready(..) => {
+                    trace!("finished waiting for liberation of stdout to stop listening loop");
+                    Poll::Ready(Err(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        "stdin/stdout pseudosocket is already used",
+                    )))
+                }
+                Poll::Pending => Poll::Pending,
+            },
+        }
+    }
+}
+
+#[cfg(feature = "socket_options")]
+fn apply_tcp_keepalive_opts(
+    c: &TcpStream,
+    keepalive: &Option<socket2::TcpKeepalive>,
+) -> std::io::Result<()> {
+    let sock_ref = socket2::SockRef::from(&c);
+    if let Some(ka) = keepalive {
+        sock_ref.set_tcp_keepalive(ka)?;
+    }
+    Ok(())
+}
+
+#[cfg(feature = "socket_options")]
+fn apply_socket_buf_opts<T: std::os::fd::AsFd>(
+    c: &T,
+    recv_buffer_size: &Option<usize>,
+    send_buffer_size: &Option<usize>,
+) -> std::io::Result<()> {
+    let sock_ref = socket2::SockRef::from(&c);
+    if let Some(n) = recv_buffer_size {
+        sock_ref.set_recv_buffer_size(*n)?;
+    }
+    if let Some(n) = send_buffer_size {
+        sock_ref.set_send_buffer_size(*n)?;
+    }
+    Ok(())
+}
+
+struct ListenerImplTcp {
+    s: TcpListener,
+    nodelay: bool,
+    #[cfg(feature = "socket_options")]
+    keepalive: Option<socket2::TcpKeepalive>,
+    #[cfg(feature = "socket_options")]
+    recv_buffer_size: Option<usize>,
+    #[cfg(feature = "socket_options")]
+    send_buffer_size: Option<usize>,
+}
+
+#[cfg(all(feature = "unix", unix))]
+struct ListenerImplUnix {
+    s: UnixListener,
+    #[cfg(feature = "socket_options")]
+    recv_buffer_size: Option<usize>,
+    #[cfg(feature = "socket_options")]
+    send_buffer_size: Option<usize>,
+}
+
 enum ListenerImpl {
-    Tcp {
-        s: TcpListener,
-        nodelay: bool,
-        #[cfg(feature = "socket_options")]
-        keepalive: Option<socket2::TcpKeepalive>,
-        #[cfg(feature = "socket_options")]
-        recv_buffer_size: Option<usize>,
-        #[cfg(feature = "socket_options")]
-        send_buffer_size: Option<usize>,
-    },
+    Tcp(ListenerImplTcp),
     #[cfg(all(feature = "unix", unix))]
-    Unix {
-        s: UnixListener,
-        #[cfg(feature = "socket_options")]
-        recv_buffer_size: Option<usize>,
-        #[cfg(feature = "socket_options")]
-        send_buffer_size: Option<usize>,
-    },
+    Unix(ListenerImplUnix),
     #[cfg(feature = "inetd")]
     Stdio(StdioListener),
 }
 
+impl ListenerImplTcp {
+    fn poll_accept(
+        &mut self,
+        cx: &mut Context<'_>,
+    ) -> Poll<std::io::Result<(Connection, SomeSocketAddr)>> {
+        let ListenerImplTcp {
+            s,
+            nodelay,
+            #[cfg(feature = "socket_options")]
+            keepalive,
+            #[cfg(feature = "socket_options")]
+            recv_buffer_size,
+            #[cfg(feature = "socket_options")]
+            send_buffer_size,
+        } = self;
+        match s.poll_accept(cx) {
+            Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
+            Poll::Ready(Ok((c, a))) => {
+                debug!(fromaddr=%a, r#type="tcp", "incoming connection");
+                if *nodelay {
+                    c.set_nodelay(true)?;
+                }
+
+                #[cfg(feature = "socket_options")]
+                {
+                    apply_tcp_keepalive_opts(&c, keepalive)?;
+                    apply_socket_buf_opts(&c, recv_buffer_size, send_buffer_size)?;
+                }
+
+                Poll::Ready(Ok((
+                    Connection(ConnectionImpl::Tcp(c)),
+                    SomeSocketAddr::Tcp(a),
+                )))
+            }
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+#[cfg(all(feature = "unix", unix))]
+impl ListenerImplUnix {
+    fn poll_accept(
+        &mut self,
+        cx: &mut Context<'_>,
+    ) -> Poll<std::io::Result<(Connection, SomeSocketAddr)>> {
+        let ListenerImplUnix {
+            s,
+            #[cfg(feature = "socket_options")]
+            recv_buffer_size,
+            #[cfg(feature = "socket_options")]
+            send_buffer_size,
+        } = self;
+        match s.poll_accept(cx) {
+            Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
+            Poll::Ready(Ok((c, a))) => {
+                debug!(r#type = "unix", "incoming connection");
+                #[cfg(feature = "socket_options")]
+                {
+                    apply_socket_buf_opts(&c, recv_buffer_size, send_buffer_size)?;
+                }
+                Poll::Ready(Ok((
+                    Connection(ConnectionImpl::Unix(c)),
+                    SomeSocketAddr::Unix(a),
+                )))
+            }
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+#[allow(clippy::missing_errors_doc)]
+#[allow(missing_docs)]
 impl Listener {
-    #[allow(missing_docs)]
     pub fn try_borrow_tcp_listener(&self) -> Option<&TcpListener> {
-        if let ListenerImpl::Tcp { ref s, .. } = self.i {
+        if let ListenerImpl::Tcp(ListenerImplTcp { ref s, .. }) = self.i {
             Some(s)
         } else {
             None
         }
     }
-    #[allow(missing_docs)]
     #[cfg(all(feature = "unix", unix))]
     #[cfg_attr(docsrs_alt, doc(cfg(all(feature = "unix", unix))))]
     pub fn try_borrow_unix_listener(&self) -> Option<&UnixListener> {
-        if let ListenerImpl::Unix { s: ref x, .. } = self.i {
+        if let ListenerImpl::Unix(ListenerImplUnix { s: ref x, .. }) = self.i {
             Some(x)
         } else {
             None
         }
     }
 
-    #[allow(missing_docs)]
     pub fn try_into_tcp_listener(self) -> Result<TcpListener, Self> {
-        if let ListenerImpl::Tcp { s, .. } = self.i {
+        if let ListenerImpl::Tcp(ListenerImplTcp { s, .. }) = self.i {
             Ok(s)
         } else {
             Err(self)
         }
     }
-    #[allow(missing_docs)]
     #[cfg(all(feature = "unix", unix))]
     #[cfg_attr(docsrs_alt, doc(cfg(all(feature = "unix", unix))))]
     pub fn try_into_unix_listener(self) -> Result<UnixListener, Self> {
-        if let ListenerImpl::Unix { s: x, .. } = self.i {
-            Ok(x)
+        if let ListenerImpl::Unix(ListenerImplUnix { s, .. }) = self.i {
+            Ok(s)
         } else {
             Err(self)
         }
@@ -959,100 +1133,17 @@ impl Listener {
             }
             self.timeout = None;
 
-            let e: std::io::Error = match &mut self.i {
-                ListenerImpl::Tcp {
-                    s,
-                    nodelay,
-                    #[cfg(feature = "socket_options")]
-                    keepalive,
-                    #[cfg(feature = "socket_options")]
-                    recv_buffer_size,
-                    #[cfg(feature = "socket_options")]
-                    send_buffer_size,
-                } => match s.poll_accept(cx) {
-                    Poll::Ready(Err(e)) => e,
-                    Poll::Ready(Ok((c, a))) => {
-                        debug!(fromaddr=%a, r#type="tcp", "incoming connection");
-                        if *nodelay {
-                            c.set_nodelay(true)?;
-                        }
-                        #[cfg(feature = "socket_options")]
-                        {
-                            if let Some(ka) = keepalive {
-                                let sock_ref = socket2::SockRef::from(&c);
-                                sock_ref.set_tcp_keepalive(ka)?;
-                            }
-                            if let Some(n) = recv_buffer_size {
-                                let sock_ref = socket2::SockRef::from(&c);
-                                sock_ref.set_recv_buffer_size(*n)?;
-                            }
-                            if let Some(n) = send_buffer_size {
-                                let sock_ref = socket2::SockRef::from(&c);
-                                sock_ref.set_send_buffer_size(*n)?;
-                            }
-                        }
-                        return Poll::Ready(Ok((
-                            Connection(ConnectionImpl::Tcp(c)),
-                            SomeSocketAddr::Tcp(a),
-                        )));
-                    }
-                    Poll::Pending => return Poll::Pending,
-                },
+            let ret = match &mut self.i {
+                ListenerImpl::Tcp(ti) => ti.poll_accept(cx),
                 #[cfg(all(feature = "unix", unix))]
-                ListenerImpl::Unix {
-                    s: x,
-                    #[cfg(feature = "socket_options")]
-                    recv_buffer_size,
-                    #[cfg(feature = "socket_options")]
-                    send_buffer_size,
-                } => match x.poll_accept(cx) {
-                    Poll::Ready(Err(e)) => e,
-                    Poll::Ready(Ok((c, a))) => {
-                        debug!(r#type = "unix", "incoming connection");
-                        #[cfg(feature = "socket_options")]
-                        {
-                            if let Some(n) = recv_buffer_size {
-                                let sock_ref = socket2::SockRef::from(&c);
-                                sock_ref.set_recv_buffer_size(*n)?;
-                            }
-                            if let Some(n) = send_buffer_size {
-                                let sock_ref = socket2::SockRef::from(&c);
-                                sock_ref.set_send_buffer_size(*n)?;
-                            }
-                        }
-                        return Poll::Ready(Ok((
-                            Connection(ConnectionImpl::Unix(c)),
-                            SomeSocketAddr::Unix(a),
-                        )));
-                    }
-                    Poll::Pending => return Poll::Pending,
-                },
+                ListenerImpl::Unix(ui) => ui.poll_accept(cx),
                 #[cfg(feature = "inetd")]
-                ListenerImpl::Stdio(x) => {
-                    match x.token.take() {
-                        Some(tx) => {
-                            debug!(r#type = "stdio", "incoming connection");
-                            return Poll::Ready(Ok((
-                                Connection(ConnectionImpl::Stdio(
-                                    tokio::io::stdin(),
-                                    tokio::io::stdout(),
-                                    Some(tx),
-                                )),
-                                SomeSocketAddr::Stdio,
-                            )));
-                        }
-                        None => match Pin::new(&mut x.rx).poll(cx) {
-                            Poll::Ready(..) => {
-                                trace!("finished waiting for liberation of stdout to stop listening loop");
-                                return Poll::Ready(Err(std::io::Error::new(
-                                    std::io::ErrorKind::Other,
-                                    "stdin/stdout pseudosocket is already used",
-                                )));
-                            }
-                            Poll::Pending => return Poll::Pending,
-                        },
-                    }
-                }
+                ListenerImpl::Stdio(x) => return x.poll_accept(cx),
+            };
+            let e: std::io::Error = match ret {
+                Poll::Ready(Err(e)) => e,
+                Poll::Ready(Ok(x)) => return Poll::Ready(Ok(x)),
+                Poll::Pending => return Poll::Pending,
             };
             if is_connection_error(&e) {
                 info!(action = "retry", "failed_accept");
@@ -1086,7 +1177,6 @@ impl Stream for Listener {
     }
 }
 
-
 /// This function defines errors that are per-connection. Which basically
 /// means that if we get this error from `accept()` system call it means
 /// next connection might be ready to be accepted.
@@ -1095,7 +1185,7 @@ impl Stream for Listener {
 /// The timeout is useful to handle resource exhaustion errors like ENFILE
 /// and EMFILE. Otherwise, could enter into tight loop.
 ///
-/// Based on https://docs.rs/hyper/latest/src/hyper/server/tcp.rs.html#109-116
+/// Based on <https://docs.rs/hyper/latest/src/hyper/server/tcp.rs.html#109-116>
 fn is_connection_error(e: &std::io::Error) -> bool {
     matches!(
         e.kind(),
@@ -1111,7 +1201,7 @@ fn is_connection_error(e: &std::io::Error) -> bool {
 #[pin_project]
 pub struct Connection(#[pin] ConnectionImpl);
 
-impl std::fmt::Debug  for Connection {
+impl std::fmt::Debug for Connection {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.0 {
             ConnectionImpl::Tcp(_) => f.write_str("Connection(tcp)"),
@@ -1137,8 +1227,9 @@ enum ConnectionImpl {
     ),
 }
 
+#[allow(missing_docs)]
+#[allow(clippy::missing_errors_doc)]
 impl Connection {
-    #[allow(missing_docs)]
     pub fn try_into_tcp(self) -> Result<TcpStream, Self> {
         if let ConnectionImpl::Tcp(s) = self.0 {
             Ok(s)
@@ -1146,7 +1237,6 @@ impl Connection {
             Err(self)
         }
     }
-    #[allow(missing_docs)]
     #[cfg(all(feature = "unix", unix))]
     #[cfg_attr(docsrs_alt, doc(cfg(all(feature = "unix", unix))))]
     pub fn try_into_unix(self) -> Result<UnixStream, Self> {
@@ -1159,7 +1249,7 @@ impl Connection {
     #[cfg(feature = "inetd")]
     #[cfg_attr(docsrs_alt, doc(cfg(feature = "inetd")))]
     /// Get parts of the connection in case of inted mode is used.
-    /// 
+    ///
     /// Third tuple part (Sender) should be used to signal [`Listener`] to exit from listening loop,
     /// allowing proper timing of listening termination - without trying to wait for second client in inetd mode,
     /// but also without exiting prematurely, while the client is still being served, as exiting the listening loop may
@@ -1172,7 +1262,6 @@ impl Connection {
         }
     }
 
-    #[allow(missing_docs)]
     pub fn try_borrow_tcp(&self) -> Option<&TcpStream> {
         if let ConnectionImpl::Tcp(ref s) = self.0 {
             Some(s)
@@ -1182,7 +1271,6 @@ impl Connection {
     }
     #[cfg(all(feature = "unix", unix))]
     #[cfg_attr(docsrs_alt, doc(cfg(all(feature = "unix", unix))))]
-    #[allow(missing_docs)]
     pub fn try_borrow_unix(&self) -> Option<&UnixStream> {
         if let ConnectionImpl::Unix(ref s) = self.0 {
             Some(s)
@@ -1192,7 +1280,6 @@ impl Connection {
     }
     #[cfg(feature = "inetd")]
     #[cfg_attr(docsrs_alt, doc(cfg(feature = "inetd")))]
-    #[allow(missing_docs)]
     pub fn try_borrow_stdio(&self) -> Option<(&Stdin, &Stdout)> {
         if let ConnectionImpl::Stdio(ref i, ref o, ..) = self.0 {
             Some((i, o))
@@ -1354,7 +1441,8 @@ impl Display for SomeSocketAddr {
 impl SomeSocketAddr {
     /// Convert this address representation into a clonable form.
     /// For UNIX socket addresses, it converts them to a string using Debug representation.
-    #[must_use] pub fn clonable(self) -> SomeSocketAddrClonable {
+    #[must_use]
+    pub fn clonable(self) -> SomeSocketAddrClonable {
         match self {
             SomeSocketAddr::Tcp(x) => SomeSocketAddrClonable::Tcp(x),
             #[cfg(all(feature = "unix", unix))]
@@ -1384,7 +1472,7 @@ impl Display for SomeSocketAddrClonable {
         match self {
             SomeSocketAddrClonable::Tcp(x) => x.fmt(f),
             #[cfg(all(feature = "unix", unix))]
-            SomeSocketAddrClonable::Unix(_x) => write!(f, "unix:{_x:?}"),
+            SomeSocketAddrClonable::Unix(x) => write!(f, "unix:{x:?}"),
             #[cfg(feature = "inetd")]
             SomeSocketAddrClonable::Stdio => "stdio".fmt(f),
         }
@@ -1396,7 +1484,6 @@ impl From<SomeSocketAddr> for SomeSocketAddrClonable {
         value.clonable()
     }
 }
-
 
 #[cfg(feature = "hyper014")]
 #[cfg_attr(docsrs_alt, doc(cfg(feature = "hyper014")))]
@@ -1434,7 +1521,7 @@ mod hyper014 {
 }
 
 /// Analogue of `axum::serve` module, but for tokio-listener.
-#[cfg(feature="axum07")]
+#[cfg(feature = "axum07")]
 #[cfg_attr(docsrs_alt, doc(cfg(feature = "axum07")))]
 pub mod axum07;
 
@@ -1462,7 +1549,7 @@ mod tonic010 {
             }
             #[cfg(all(feature = "unix", unix))]
             if let Some(unix_stream) = self.try_borrow_unix() {
-                return ListenerConnectInfo::Unix(unix_stream.connect_info())
+                return ListenerConnectInfo::Unix(unix_stream.connect_info());
             }
             #[cfg(feature = "inetd")]
             if self.try_borrow_stdio().is_some() {
@@ -1474,7 +1561,7 @@ mod tonic010 {
     }
 }
 
-#[cfg(feature="tokio-util")]
+#[cfg(feature = "tokio-util")]
 #[cfg_attr(docsrs_alt, doc(cfg(feature = "tokio-util")))]
 mod tokioutil {
     use crate::SomeSocketAddr;
@@ -1484,15 +1571,18 @@ mod tokioutil {
 
         type Addr = SomeSocketAddr;
 
-        fn poll_accept(&mut self, cx: &mut std::task::Context<'_>) -> std::task::Poll<std::io::Result<(Self::Io, Self::Addr)>> {
+        fn poll_accept(
+            &mut self,
+            cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<std::io::Result<(Self::Io, Self::Addr)>> {
             self.poll_accept(cx)
         }
 
         fn local_addr(&self) -> std::io::Result<Self::Addr> {
             match &self.i {
-                crate::ListenerImpl::Tcp { s, .. } => Ok(SomeSocketAddr::Tcp(s.local_addr()?)),
+                crate::ListenerImpl::Tcp(crate::ListenerImplTcp{ s, .. }) => Ok(SomeSocketAddr::Tcp(s.local_addr()?)),
                 #[cfg(all(feature = "unix", unix))]
-                crate::ListenerImpl::Unix { s, .. } =>  Ok(SomeSocketAddr::Unix(s.local_addr()?)),
+                crate::ListenerImpl::Unix(crate::ListenerImplUnix{ s, .. }) => Ok(SomeSocketAddr::Unix(s.local_addr()?)),
                 #[cfg(feature = "inetd")]
                 crate::ListenerImpl::Stdio(_) => Ok(SomeSocketAddr::Stdio),
             }
