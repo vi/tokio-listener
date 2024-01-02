@@ -83,9 +83,9 @@ pub struct Serve<M, S> {
 /// Serve the service with the supplied `tokio_listener`-based listener.
 ///
 /// See [`axum07::serve::serve`] for more documentation.
-/// 
+///
 /// See the following examples in `tokio_listener` project:
-/// 
+///
 /// * [`clap_axum07.rs`](https://github.com/vi/tokio-listener/blob/main/examples/clap_axum07.rs) for simple example
 /// * [`clap_axum07_advanced.rs`](https://github.com/vi/tokio-listener/blob/main/examples/clap_axum07_advanced.rs) for using incoming connection info and graceful shutdown.
 pub fn serve<M, S>(tokio_listener: crate::Listener, make_service: M) -> Serve<M, S>
@@ -120,11 +120,10 @@ where
             } = self;
 
             loop {
-                let (stream, remote_addr) =
-                    match tokio_listener_accept(&mut tokio_listener).await {
-                        Some(conn) => conn,
-                        None => continue,
-                    };
+                let Some((stream, remote_addr)) = tokio_listener_accept(&mut tokio_listener).await
+                else {
+                    continue;
+                };
                 let stream = TokioIo::new(stream);
 
                 poll_fn(|cx| make_service.poll_ready(cx))
@@ -386,8 +385,8 @@ where
                     loop {
                         tokio::select! {
                             result = conn.as_mut() => {
-                                if let Err(_err) = result {
-                                    trace!("failed to serve connection: {_err:#}");
+                                if let Err(err) = result {
+                                    trace!("failed to serve connection: {err:#}");
                                 }
                                 break;
                             }
@@ -422,7 +421,7 @@ impl<M, S> Serve<M, S> {
     /// Prepares a server to handle graceful shutdown when the provided future completes.
     ///
     /// See [the original documentation][1] for the example.
-    /// 
+    ///
     /// [1]: axum07::serve::Serve::with_graceful_shutdown
     pub fn with_graceful_shutdown<F>(self, signal: F) -> WithGracefulShutdown<M, S, F>
     where

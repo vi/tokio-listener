@@ -9,6 +9,7 @@ use tokio_listener::TcpKeepaliveParams;
 
 /// Small http service app to demonstrate tokio-listener
 #[derive(FromArgs)]
+#[allow(clippy::struct_excessive_bools)]
 struct Args {
     // TCP socket address, UNIX socket file path or @-prefixed abstract name, `-` or `sd-listen` or `sd-listen-unix`.
     #[argh(positional)]
@@ -70,22 +71,22 @@ struct Args {
 async fn main() -> anyhow::Result<()> {
     let args: Args = argh::from_env();
 
-    let sopts = tokio_listener::SystemOptions::default();
+    let system_options = tokio_listener::SystemOptions::default();
 
-    let mut uopts = tokio_listener::UserOptions::default();
-    uopts.unix_listen_unlink = args.unix_listen_unlink;
-    uopts.unix_listen_chmod = args.unix_listen_chmod;
-    uopts.unix_listen_uid = args.unix_listen_uid;
-    uopts.unix_listen_gid = args.unix_listen_gid;
-    uopts.sd_accept_ignore_environment = args.sd_accept_ignore_environment;
-    uopts.tcp_keepalive = args.tcp_keepalive;
-    uopts.tcp_reuse_port = args.tcp_reuse_port;
-    uopts.recv_buffer_size = args.recv_buffer_size;
-    uopts.send_buffer_size = args.send_buffer_size;
-    uopts.tcp_only_v6 = args.tcp_only_v6;
-    uopts.tcp_listen_backlog = args.tcp_listen_backlog;
+    let mut user_options = tokio_listener::UserOptions::default();
+    user_options.unix_listen_unlink = args.unix_listen_unlink;
+    user_options.unix_listen_chmod = args.unix_listen_chmod;
+    user_options.unix_listen_uid = args.unix_listen_uid;
+    user_options.unix_listen_gid = args.unix_listen_gid;
+    user_options.sd_accept_ignore_environment = args.sd_accept_ignore_environment;
+    user_options.tcp_keepalive = args.tcp_keepalive;
+    user_options.tcp_reuse_port = args.tcp_reuse_port;
+    user_options.recv_buffer_size = args.recv_buffer_size;
+    user_options.send_buffer_size = args.send_buffer_size;
+    user_options.tcp_only_v6 = args.tcp_only_v6;
+    user_options.tcp_listen_backlog = args.tcp_listen_backlog;
 
-    let listener = tokio_listener::Listener::bind(&args.listen_address, &sopts, &uopts).await?;
+    let listener = tokio_listener::Listener::bind(&args.listen_address, &system_options, &user_options).await?;
 
     let make_svc = make_service_fn(move |_| {
         let text = args.text.clone();

@@ -4,11 +4,11 @@ use tonic_health::server::health_reporter;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> anyhow::Result<()> {
-    let sopts = tokio_listener::SystemOptions::default();
-    let uopts = tokio_listener::UserOptions::default();
+    let sys_opts = tokio_listener::SystemOptions::default();
+    let user_opts = tokio_listener::UserOptions::default();
     let addr = tokio_listener::ListenerAddress::Path("/tmp/test.sock".into());
 
-    let listener = tokio_listener::Listener::bind(&addr, &sopts, &uopts).await?;
+    let listener = tokio_listener::Listener::bind(&addr, &sys_opts, &user_opts).await?;
 
     let (_health_reporter, health_server) = health_reporter();
 
