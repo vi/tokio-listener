@@ -75,6 +75,7 @@ use std::{
 use std::os::fd::RawFd;
 
 use futures_core::{Future, Stream};
+use futures_util::{FutureExt, future::Fuse};
 use pin_project::pin_project;
 use tokio::{
     io::{AsyncRead, AsyncWrite, Stdin, Stdout},
@@ -885,7 +886,7 @@ impl Listener {
             ListenerAddress::Inetd => {
                 let (tx, rx) = channel();
                 ListenerImpl::Stdio(StdioListener {
-                    rx,
+                    rx: rx.fuse(),
                     token: Some(tx),
                 })
             }
@@ -911,7 +912,7 @@ impl Listener {
 
 #[cfg(feature = "inetd")]
 struct StdioListener {
-    rx: Receiver<()>,
+    rx: Fuse<Receiver<()>>,
     token: Option<Sender<()>>,
 }
 

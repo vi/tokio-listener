@@ -122,6 +122,9 @@ where
             loop {
                 let Some((stream, remote_addr)) = tokio_listener_accept(&mut tokio_listener).await
                 else {
+                    if tokio_listener.no_more_connections() {
+                        return Ok(());
+                    }
                     continue;
                 };
                 let stream = TokioIo::new(stream);
@@ -237,7 +240,7 @@ async fn tokio_listener_accept(
     match listener.accept().await {
         Ok(conn) => Some(conn),
         Err(e) => {
-            if is_connection_error(&e) {
+            if is_connection_error(&e) || listener.no_more_connections() {
                 return None;
             }
 
@@ -307,6 +310,7 @@ where
     }
 }
 
+#[allow(clippy::single_match_else)]
 impl<M, S, F> IntoFuture for WithGracefulShutdown<M, S, F>
 where
     M: for<'a> Service<IncomingStream<'a>, Error = Infallible, Response = S> + Send + 'static,
@@ -342,7 +346,12 @@ where
                     conn = tokio_listener_accept(&mut tokio_listener) => {
                         match conn {
                             Some(conn) => conn,
-                            None => continue,
+                            None => { 
+                                if tokio_listener.no_more_connections() {
+                                    break;
+                                }
+                                continue
+                            }
                         }
                     }
                     () = signal_tx.closed() => {
