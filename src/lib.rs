@@ -75,7 +75,8 @@ use std::{
 use std::os::fd::RawFd;
 
 use futures_core::{Future, Stream};
-use futures_util::{FutureExt, future::Fuse};
+#[cfg(feature = "inetd")]
+use futures_util::{future::Fuse, FutureExt};
 use pin_project::pin_project;
 use tokio::{
     io::{AsyncRead, AsyncWrite, Stdin, Stdout},
@@ -1581,9 +1582,13 @@ mod tokioutil {
 
         fn local_addr(&self) -> std::io::Result<Self::Addr> {
             match &self.i {
-                crate::ListenerImpl::Tcp(crate::ListenerImplTcp{ s, .. }) => Ok(SomeSocketAddr::Tcp(s.local_addr()?)),
+                crate::ListenerImpl::Tcp(crate::ListenerImplTcp { s, .. }) => {
+                    Ok(SomeSocketAddr::Tcp(s.local_addr()?))
+                }
                 #[cfg(all(feature = "unix", unix))]
-                crate::ListenerImpl::Unix(crate::ListenerImplUnix{ s, .. }) => Ok(SomeSocketAddr::Unix(s.local_addr()?)),
+                crate::ListenerImpl::Unix(crate::ListenerImplUnix { s, .. }) => {
+                    Ok(SomeSocketAddr::Unix(s.local_addr()?))
+                }
                 #[cfg(feature = "inetd")]
                 crate::ListenerImpl::Stdio(_) => Ok(SomeSocketAddr::Stdio),
             }

@@ -54,7 +54,7 @@ hyper014 = ["dep:hyper014"]
 axum07 = ["dep:hyper1", "dep:hyper-util", "dep:futures-util", "dep:tower-service", "dep:tower"]
 
 ## Enable inetd (stdin/stdout) mode
-inetd = []
+inetd = ["dep:futures-util"]
 
 ## Enable UNIX socket mode
 unix = []
