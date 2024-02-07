@@ -59,6 +59,7 @@
     allow(unused_imports, irrefutable_let_patterns, unused_variables)
 )]
 
+#[allow(unused_imports)]
 use std::{
     ffi::c_int,
     fmt::Display,
@@ -961,9 +962,26 @@ fn apply_tcp_keepalive_opts(
     Ok(())
 }
 
-#[cfg(feature = "socket_options")]
+
+#[cfg(all(feature = "socket_options", unix))]
 fn apply_socket_buf_opts<T: std::os::fd::AsFd>(
     c: &T,
+    recv_buffer_size: &Option<usize>,
+    send_buffer_size: &Option<usize>,
+) -> std::io::Result<()> {
+    let sock_ref = socket2::SockRef::from(&c);
+    if let Some(n) = recv_buffer_size {
+        sock_ref.set_recv_buffer_size(*n)?;
+    }
+    if let Some(n) = send_buffer_size {
+        sock_ref.set_send_buffer_size(*n)?;
+    }
+    Ok(())
+}
+
+#[cfg(all(feature = "socket_options", not(unix)))]
+fn apply_socket_buf_opts(
+    c: &TcpStream,
     recv_buffer_size: &Option<usize>,
     send_buffer_size: &Option<usize>,
 ) -> std::io::Result<()> {
@@ -1530,14 +1548,20 @@ pub mod axum07;
 #[cfg(feature = "tonic010")]
 #[cfg_attr(docsrs_alt, doc(cfg(feature = "tonic010")))]
 mod tonic010 {
-    use tonic::transport::server::{Connected, TcpConnectInfo, UdsConnectInfo};
+    use tonic::transport::server::{Connected, TcpConnectInfo};
+    #[cfg(all(feature = "unix", unix))]
+    use tonic::transport::server::UdsConnectInfo;
 
     use crate::Connection;
 
     #[derive(Clone)]
     pub enum ListenerConnectInfo {
         Tcp(TcpConnectInfo),
+        #[cfg(all(feature = "unix", unix))]
+        #[cfg_attr(docsrs_alt, doc(cfg(all(feature = "unix", unix))))]
         Unix(UdsConnectInfo),
+        #[cfg(feature = "inetd")]
+        #[cfg_attr(docsrs_alt, doc(cfg(feature = "inetd")))]
         Stdio,
         Other,
     }

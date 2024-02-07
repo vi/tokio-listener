@@ -1,3 +1,9 @@
+<a name="v0.3.1"></a>
+# v0.3.1 - Fix compilation on Windows
+
+* Fixed cfg gates to make it buildable on Windows (with reduced options, obviously)
+
+
 <a name="v0.3.0"></a>
 # v0.3.0 - Axum 0.7 support
 
