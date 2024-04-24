@@ -30,7 +30,7 @@ use std::{fmt::Display, net::SocketAddr, path::PathBuf, str::FromStr};
 )]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ListenerAddress {
-    /// Usual server TCP socket. triggered by specifying IPv4 or IPv6 address and port pair.  
+    /// Usual server TCP socket. Triggered by specifying IPv4 or IPv6 address and port pair.
     /// Example: `127.0.0.1:8080`.
     ///
     /// Hostnames are not supported.
@@ -41,14 +41,14 @@ pub enum ListenerAddress {
     /// Linux abstract-namespaced UNIX socket. Indicated by using `@` as a first character.
     /// Example: `@server`
     Abstract(String),
-    /// "inetd" or "Accept=yes" mode where stdin and stdout (file descriptors 0 and 1) are using together as a socket
+    /// "inetd" or "Accept=yes" mode where stdin and stdout (file descriptors 0 and 1) are used together as a socket
     /// and only one connection is served. Triggered by using `inetd` or `stdio` or `-` as the address.
     Inetd,
-    /// "Accept=no" mode - using manually specified file descriptor as a pre-created server socket reeady to accept TCP connections.
-    /// Triggered by specifying `sd-listen` as address, which sets `3` as file descriptor number
+    /// "Accept=no" mode - using manually specified file descriptor as a pre-created server socket ready to accept TCP connections.
+    /// Triggered by specifying `sd-listen` as address, which sets `3` as file descriptor number.
     FromFdTcp(i32),
-    /// "Accept=no" mode - using fmanually specified ile descriptor as a pre-created server socket reeady to accept Unix connections.
-    /// Triggered by specifying `sd-listen-unix` as address, which sets `3` as file descriptor number
+    /// "Accept=no" mode - using manually specified file descriptor as a pre-created server socket ready to accept Unix connections.
+    /// Triggered by specifying `sd-listen-unix` as address, which sets `3` as file descriptor number.
     FromFdUnix(i32),
 }
 
