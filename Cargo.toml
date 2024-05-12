@@ -63,8 +63,8 @@ unix = []
 ## Enable tools such as unlink/chmod/chown for UNIX path sockets in [`UserOptions`]
 unix_path_tools = ["nix"]
 
-## Enable constructing sockets from inherited file descriptor. Disabling this should make the crate `unsafe`-free.
-sd_listen = []
+## Enable receiving pre-bound sockets from inherited file descriptor (e.g. from systemd). Disabling this should make the crate `unsafe`-free.
+sd_listen = ["socket2"]
 
 ## Enable socket options such as receive or send buffer sizes or keepalives in [`UserOptions`]
 socket_options = ["socket2"]

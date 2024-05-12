@@ -44,16 +44,16 @@ pub enum ListenerAddress {
     /// "inetd" or "Accept=yes" mode where stdin and stdout (file descriptors 0 and 1) are used together as a socket
     /// and only one connection is served. Triggered by using `inetd` or `stdio` or `-` as the address.
     Inetd,
-    /// "Accept=no" mode - using manually specified file descriptor as a pre-created server socket ready to accept TCP connections.
+    /// SystemD's "Accept=no" mode - using manually specified file descriptor as a pre-created server socket ready to accept TCP or UNIX connections.
     /// Triggered by specifying `sd-listen` as address, which sets `3` as file descriptor number.
-    FromFdTcp(i32),
-    /// "Accept=no" mode - using manually specified file descriptor as a pre-created server socket ready to accept Unix connections.
-    /// Triggered by specifying `sd-listen-unix` as address, which sets `3` as file descriptor number.
-    FromFdUnix(i32),
+    FromFd(i32),
+    /// SystemD's "Accept=no" mode - relying on `LISTEN_FDNAMES` environment variable instead of using the hard coded number
+    /// Triggered by using appending a colon and a name after `sd-listen`. Example: `sd-listen:mynamedsock`
+    FromFdNamed(String),
 }
 
 
-const SD_LISTEN_FDS_START: i32 = 3;
+pub(crate) const SD_LISTEN_FDS_START: i32 = 3;
 
 impl FromStr for ListenerAddress {
     type Err = &'static str;
@@ -66,11 +66,18 @@ impl FromStr for ListenerAddress {
         } else if s.eq_ignore_ascii_case("inetd") || s.eq_ignore_ascii_case("stdio") || s == "-" {
             Ok(ListenerAddress::Inetd)
         } else if s.eq_ignore_ascii_case("sd-listen") || s.eq_ignore_ascii_case("sd_listen") {
-            Ok(ListenerAddress::FromFdTcp(SD_LISTEN_FDS_START))
+            Ok(ListenerAddress::FromFd(SD_LISTEN_FDS_START))
         } else if s.eq_ignore_ascii_case("sd-listen-unix")
             || s.eq_ignore_ascii_case("sd_listen_unix")
         {
-            Ok(ListenerAddress::FromFdUnix(SD_LISTEN_FDS_START))
+            Ok(ListenerAddress::FromFd(SD_LISTEN_FDS_START))
+        // No easy `strip_prefix_ignore_ascii_case` in Rust stdlib,
+        // so this specific variant is not reachable for upper case end users as well.
+        } else if let Some(x) = s.strip_prefix("sd-listen:").or(s.strip_prefix("sd_listen:")) {
+            if x.contains(':') {
+                return Err("Invalid tokio-listener sd-listen: name");
+            }
+            Ok(ListenerAddress::FromFdNamed(x.to_owned()))
         } else if let Ok(a) = s.parse() {
             Ok(ListenerAddress::Tcp(a))
         } else {
@@ -100,19 +107,15 @@ impl Display for ListenerAddress {
                 write!(f, "@{p}")
             }
             ListenerAddress::Inetd => "inetd".fmt(f),
-            ListenerAddress::FromFdTcp(fd) => {
+            ListenerAddress::FromFd(fd) => {
                 if *fd == SD_LISTEN_FDS_START {
                     "sd-listen".fmt(f)
                 } else {
-                    write!(f, "accept-tcp-from-fd:{fd}")
+                    write!(f, "accept-from-fd:{fd}")
                 }
             }
-            ListenerAddress::FromFdUnix(fd) => {
-                if *fd == SD_LISTEN_FDS_START {
-                    "sd-listen-unix".fmt(f)
-                } else {
-                    write!(f, "accept-unix-from-fd:{fd}")
-                }
+            ListenerAddress::FromFdNamed(name) => {
+                write!(f, "sd-listen:{name}")
             }
         }
     }

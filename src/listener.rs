@@ -27,8 +27,10 @@ use tracing::{debug, info, trace};
 #[cfg(unix)]
 use tokio::net::UnixListener;
 
-use crate::{connection::ConnectionImpl, Connection, ListenerAddress, SomeSocketAddr, SystemOptions, UserOptions};
-
+use crate::{
+    connection::ConnectionImpl, Connection, ListenerAddress, SomeSocketAddr, SystemOptions,
+    UserOptions,
+};
 
 /// Configured TCP. `AF_UNIX` or other stream socket acceptor.
 ///
@@ -50,7 +52,6 @@ impl std::fmt::Debug for Listener {
         }
     }
 }
-
 
 async fn listen_tcp(
     a: &SocketAddr,
@@ -120,8 +121,8 @@ fn listen_path(usr_opts: &UserOptions, p: &PathBuf) -> Result<ListenerImpl, std:
     });
     #[cfg(feature = "unix_path_tools")]
     {
-        use std::os::unix::fs::PermissionsExt;
         use crate::UnixChmodVariant;
+        use std::os::unix::fs::PermissionsExt;
         if let Some(chmod) = usr_opts.unix_listen_chmod {
             let mode = match chmod {
                 UnixChmodVariant::Owner => 0o006,
@@ -159,13 +160,17 @@ fn listen_abstract(a: &String, usr_opts: &UserOptions) -> Result<ListenerImpl, s
 }
 
 #[cfg(all(feature = "sd_listen", unix))]
-fn listen_from_fd_tcp(
+fn listen_from_fd(
     usr_opts: &UserOptions,
     fdnum: i32,
-    sys_opts: SystemOptions,
+    sys_opts: &SystemOptions,
 ) -> Result<ListenerImpl, std::io::Error> {
     use std::os::fd::FromRawFd;
 
+    use tracing::error;
+
+    use std::os::fd::IntoRawFd;
+
     use crate::listener_address::check_env_for_fd;
     if !usr_opts.sd_accept_ignore_environment && check_env_for_fd(fdnum).is_none() {
         return Err(std::io::Error::new(
@@ -174,45 +179,88 @@ fn listen_from_fd_tcp(
         ));
     }
     let fd: RawFd = (fdnum).into();
-    let s = unsafe { std::net::TcpListener::from_raw_fd(fd) };
-    s.set_nonblocking(true)?;
-    Ok(ListenerImpl::Tcp(ListenerImplTcp {
-        s: TcpListener::from_std(s)?,
-        nodelay: sys_opts.nodelay,
-        #[cfg(feature = "socket_options")]
-        keepalive: usr_opts
-            .tcp_keepalive
-            .as_ref()
-            .map(crate::TcpKeepaliveParams::to_socket2),
-        #[cfg(feature = "socket_options")]
-        recv_buffer_size: usr_opts.recv_buffer_size,
-        #[cfg(feature = "socket_options")]
-        send_buffer_size: usr_opts.send_buffer_size,
-    }))
+
+    let s = unsafe { socket2::Socket::from_raw_fd(fd) };
+    let sa = s.local_addr().map_err(|e| {
+        error!("Failed to determine socket domain of file descriptor {fd}: {e}");
+        e
+    })?;
+    let unix = sa.domain() == socket2::Domain::UNIX;
+    let fd = s.into_raw_fd();
+
+    if unix {
+        #[cfg(not(feature = "unix"))] {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Socket inherited using sd-listen points to a UNIX-domain socket, but this feature was not selected at compile time in tokio-listener",
+            ));
+        }
+        #[cfg(feature = "unix")] {
+            let s = unsafe { std::os::unix::net::UnixListener::from_raw_fd(fd) };
+            s.set_nonblocking(true)?;
+            Ok(ListenerImpl::Unix(ListenerImplUnix {
+                s: UnixListener::from_std(s)?,
+                #[cfg(feature = "socket_options")]
+                send_buffer_size: usr_opts.send_buffer_size,
+        
+                #[cfg(feature = "socket_options")]
+                recv_buffer_size: usr_opts.recv_buffer_size,
+            }))
+        }
+    } else {
+        let s = unsafe { std::net::TcpListener::from_raw_fd(fd) };
+        s.set_nonblocking(true)?;
+        Ok(ListenerImpl::Tcp(ListenerImplTcp {
+            s: TcpListener::from_std(s)?,
+            nodelay: sys_opts.nodelay,
+            #[cfg(feature = "socket_options")]
+            keepalive: usr_opts
+                .tcp_keepalive
+                .as_ref()
+                .map(crate::TcpKeepaliveParams::to_socket2),
+            #[cfg(feature = "socket_options")]
+            recv_buffer_size: usr_opts.recv_buffer_size,
+            #[cfg(feature = "socket_options")]
+            send_buffer_size: usr_opts.send_buffer_size,
+        }))
+    }
 }
 
-#[cfg(all(feature = "sd_listen", feature = "unix", unix))]
-fn listen_from_fd_unix(usr_opts: &UserOptions, fdnum: i32) -> Result<ListenerImpl, std::io::Error> {
-    use std::os::fd::FromRawFd;
 
-    use crate::listener_address::check_env_for_fd;
-    if !usr_opts.sd_accept_ignore_environment && check_env_for_fd(fdnum).is_none() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "Failed LISTEN_PID or LISTEN_FDS environment check for sd-listen mode",
-        ));
+#[cfg(all(feature = "sd_listen", unix))]
+fn listen_from_fd_named(
+    usr_opts: &UserOptions,
+    fdname: &str,
+    sys_opts: &SystemOptions,
+) -> Result<ListenerImpl, std::io::Error> {
+
+    let listen_fdnames = match std::env::var("LISTEN_FDNAMES") {
+        Ok(x) => x,
+        Err(e) => match e {
+            std::env::VarError::NotPresent => return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "tokio-listener requested to use named inherited file descriptor, but no LISTEN_FDNAMES environment variable present",
+            )),
+            std::env::VarError::NotUnicode(_) => return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "tokio-listener requested to use named inherited file descriptor, but LISTEN_FDNAMES environment variable contains non-unicode content",
+            )),
+        }
+    };
+
+    let mut fd : RawFd = crate::listener_address::SD_LISTEN_FDS_START as RawFd;
+    for name in listen_fdnames.split(':') {
+        debug!("Considering LISTEN_FDNAMES chunk {name}");
+        if name == fdname {
+            return listen_from_fd(usr_opts, fd, sys_opts);
+        }
+        fd += 1;
     }
-    let fd: RawFd = (fdnum).into();
-    let s = unsafe { std::os::unix::net::UnixListener::from_raw_fd(fd) };
-    s.set_nonblocking(true)?;
-    Ok(ListenerImpl::Unix(ListenerImplUnix {
-        s: UnixListener::from_std(s)?,
-        #[cfg(feature = "socket_options")]
-        send_buffer_size: usr_opts.send_buffer_size,
 
-        #[cfg(feature = "socket_options")]
-        recv_buffer_size: usr_opts.recv_buffer_size,
-    }))
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Other,
+        format!("tokio-listener requested to use named inherited file descriptor {fdname}, but LISTEN_FDNAMES environment variable does not contain that chunk."),
+    ))
 }
 
 impl Listener {
@@ -248,9 +296,9 @@ impl Listener {
                 })
             }
             #[cfg(all(feature = "sd_listen", unix))]
-            ListenerAddress::FromFdTcp(fdnum) => listen_from_fd_tcp(usr_opts, *fdnum, *sys_opts)?,
-            #[cfg(all(feature = "sd_listen", feature = "unix", unix))]
-            ListenerAddress::FromFdUnix(fdnum) => listen_from_fd_unix(usr_opts, *fdnum)?,
+            ListenerAddress::FromFd(fdnum) => listen_from_fd(usr_opts, *fdnum, sys_opts)?,
+            #[cfg(all(feature = "sd_listen", unix))]
+            ListenerAddress::FromFdNamed(fdname) => listen_from_fd_named(usr_opts, fdname, sys_opts)?,
             #[allow(unreachable_patterns)]
             _ => {
                 return Err(std::io::Error::new(
@@ -304,7 +352,6 @@ impl StdioListener {
         }
     }
 }
-
 
 #[allow(clippy::missing_errors_doc)]
 #[allow(missing_docs)]
@@ -428,7 +475,6 @@ pub(crate) fn is_connection_error(e: &std::io::Error) -> bool {
     )
 }
 
-
 pub(crate) struct ListenerImplTcp {
     pub(crate) s: TcpListener,
     nodelay: bool,
@@ -527,7 +573,6 @@ impl ListenerImplUnix {
     }
 }
 
-
 #[cfg(feature = "socket_options")]
 fn apply_tcp_keepalive_opts(
     c: &TcpStream,
@@ -539,7 +584,6 @@ fn apply_tcp_keepalive_opts(
     }
     Ok(())
 }
-
 
 #[cfg(all(feature = "socket_options", unix))]
 fn apply_socket_buf_opts<T: std::os::fd::AsFd>(

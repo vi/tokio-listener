@@ -42,11 +42,12 @@ See [crate docs](https://docs.rs/tokio-listener) for API reference and some othe
 Given this series of invocations:
 
 ```
-target/debug/examples/clap_axum 127.0.0.1:8080   $'Hello from usual mode\n'
-target/debug/examples/clap_axum ./path_socket    $'Hello from UNIX socket path mode\n'
-target/debug/examples/clap_axum @abstract_socket $'Hello from UNIX socket abstract mode\n'
-systemd-socket-activate          -l 8081 target/debug/examples/clap_axum   sd-listen   $'Hello from pre-listened socket\n'
-systemd-socket-activate --inetd -al 8082 target/debug/examples/clap_axum   inetd       $'Hello from inetd mode\n'
+target/debug/examples/clap_axum07 127.0.0.1:8080   $'Hello from usual mode\n'
+target/debug/examples/clap_axum07 ./path_socket    $'Hello from UNIX socket path mode\n'
+target/debug/examples/clap_axum07 @abstract_socket $'Hello from UNIX socket abstract mode\n'
+systemd-socket-activate          -l 8081 target/debug/examples/clap_axum07   sd-listen   $'Hello from pre-listened socket\n'
+systemd-socket-activate --inetd -al 8082 target/debug/examples/clap_axum07   inetd       $'Hello from inetd mode\n'
+systemd-socket-activate -l 8083 -l 8084 --fdname=foo:bar -- target/debug/examples/clap_axum07   sd-listen:bar   $'Hello from a named pre-listened socket\n'
 ```
 
 and this [Caddyfile](https://caddyserver.com/):
