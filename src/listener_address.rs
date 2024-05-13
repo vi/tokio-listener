@@ -21,7 +21,8 @@ use std::{fmt::Display, net::SocketAddr, path::PathBuf, str::FromStr};
 /// let addr : ListenerAddress = "inetd".parse().unwrap();
 /// let addr : ListenerAddress = "sd-listen".parse().unwrap();
 /// let addr : ListenerAddress = "SD_LISTEN".parse().unwrap();
-/// let addr : ListenerAddress = "sd-listen-unix".parse().unwrap();
+/// let addr : ListenerAddress = "sd-listen:named_socket".parse().unwrap();
+/// let addr : ListenerAddress = "sd-listen:*".parse().unwrap();
 /// ```
 #[non_exhaustive]
 #[cfg_attr(
@@ -49,6 +50,8 @@ pub enum ListenerAddress {
     FromFd(i32),
     /// SystemD's "Accept=no" mode - relying on `LISTEN_FDNAMES` environment variable instead of using the hard coded number
     /// Triggered by using appending a colon and a name after `sd-listen`. Example: `sd-listen:mynamedsock`
+    /// 
+    /// Special name `*` means to bind all passed addresses simultaneously, if `multi-listener` crate feature is enabled.
     FromFdNamed(String),
 }
 

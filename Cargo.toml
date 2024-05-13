@@ -78,7 +78,7 @@ tonic011 = ["dep:tonic"]
 ## Enable [`tokio_util::net::Listener`] implementation for [`Listener`].
 tokio-util = ["dep:tokio-util"]
 
-multi-listener = []
+multi-listener = ["dep:futures-util"]
 
 [dev-dependencies]
 anyhow = "1.0.71"

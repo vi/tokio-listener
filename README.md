@@ -21,6 +21,7 @@ While it is a solid default choice, sometimes more flexibility is desired, espec
 * `serde` intergration - custom address type behaves like a string with respect to Serde. Other options can also be serialized or deserialized.
 * For UNIX path sockets, it supports unlinking, chowning and chmodding the file per user request.
 * `axum 0.7` integration.
+* Multi-listener - easy was to bind to multiple ports simulteneously. Combined with systemd support, also allows to trigger multi-listen using special `sd-listen:*` address. Not enabled by default.
 
 # Examples
 
@@ -48,6 +49,7 @@ target/debug/examples/clap_axum07 @abstract_socket $'Hello from UNIX socket abst
 systemd-socket-activate          -l 8081 target/debug/examples/clap_axum07   sd-listen   $'Hello from pre-listened socket\n'
 systemd-socket-activate --inetd -al 8082 target/debug/examples/clap_axum07   inetd       $'Hello from inetd mode\n'
 systemd-socket-activate -l 8083 -l 8084 --fdname=foo:bar -- target/debug/examples/clap_axum07   sd-listen:bar   $'Hello from a named pre-listened socket\n'
+systemd-socket-activate -l 8085 -l 8086 -- target/debug/examples/clap_axum07   sd-listen:*   $'Hello from any of the two pre-listened sockets\n'
 ```
 
 and this [Caddyfile](https://caddyserver.com/):
@@ -115,7 +117,7 @@ Arguments:
           * Special keyword "inetd" for serving one connection from stdin/stdout
           
           * Special keyword "sd-listen" to accept connections from file descriptor 3 (e.g. systemd socket activation).
-            You can also specify a named descriptor after a colon.
+            You can also specify a named descriptor after a colon or * to use all passed sockets (if this feature is enabled).
 
   <TEXT_TO_SERVE>
           Line of text to return as a body of incoming requests

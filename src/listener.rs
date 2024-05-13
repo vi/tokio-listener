@@ -236,6 +236,19 @@ fn listen_from_fd_named(
     sys_opts: &SystemOptions,
 ) -> Result<ListenerImpl, std::io::Error> {
 
+    if fdname == "*" {
+        #[cfg(not(feature = "multi-listener"))] {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("tokio-listener requested bind to all inherited sockets, but `multi-listener` feature was not enabled at compile time."),
+            ));
+        }
+
+        #[cfg(feature = "multi-listener")] {
+            return listen_from_fd_all(usr_opts, sys_opts);
+        }
+    }
+
     let listen_fdnames = match std::env::var("LISTEN_FDNAMES") {
         Ok(x) => x,
         Err(e) => match e {
@@ -263,6 +276,44 @@ fn listen_from_fd_named(
         std::io::ErrorKind::Other,
         format!("tokio-listener requested to use named inherited file descriptor {fdname}, but LISTEN_FDNAMES environment variable does not contain that chunk."),
     ))
+}
+
+#[cfg(all(feature = "sd_listen", unix, feature="multi-listener"))]
+fn listen_from_fd_all(
+    usr_opts: &UserOptions,
+    sys_opts: &SystemOptions,
+) -> Result<ListenerImpl, std::io::Error> {
+    use crate::listener_address::SD_LISTEN_FDS_START;
+    use futures_util::FutureExt;
+
+
+    let listen_fds = match std::env::var("LISTEN_FDS") {
+        Ok(x) => x,
+        Err(e) => match e {
+            std::env::VarError::NotPresent => return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "tokio-listener requested to use all named inherited file descriptor, but no LISTEN_FDS environment variable present",
+            )),
+            std::env::VarError::NotUnicode(_) => return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "tokio-listener requested to use all named inherited file descriptor, but LISTEN_FDS environment variable contains non-unicode content",
+            )),
+        }
+    };
+    let n : i32 = match listen_fds.parse() {
+        Ok(x) if x > 0 && x < 4096  => x,
+        _ => return Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "tokio-listener requested to use all named inherited file descriptor, LISTEN_FDS environment variable contains bad value",
+        )),
+    };
+
+    debug!("Parsed LISTEN_FDS");
+
+    let addrs = Vec::from_iter((SD_LISTEN_FDS_START..(SD_LISTEN_FDS_START+n)).map(|x|ListenerAddress::FromFd(x)));
+    
+    // Only new TCP sockets actually require real awaiting, everything else can be fast-forwarded
+    Ok(Listener::bind_multiple(&addrs, sys_opts, usr_opts).now_or_never().unwrap()?.i)
 }
 
 impl Listener {

@@ -32,7 +32,7 @@ pub struct ListenerAddressPositional {
     /// * Special keyword "inetd" for serving one connection from stdin/stdout
     ///
     /// * Special keyword "sd-listen" to accept connections from file descriptor 3 (e.g. systemd socket activation).
-    ///   You can also specify a named descriptor after a colon.
+    ///   You can also specify a named descriptor after a colon or * to use all passed sockets (if this feature is enabled)
     ///
     #[cfg_attr(
         not(any(target_os = "linux", target_os = "android")),
@@ -81,7 +81,7 @@ pub struct ListenerAddressLFlag {
     /// * Special keyword "inetd" for serving one connection from stdin/stdout
     ///
     /// * Special keyword "sd-listen" to accept connections from file descriptor 3 (e.g. systemd socket activation).
-    ///   You can also specify a named descriptor after a colon.
+    ///   You can also specify a named descriptor after a colon or * to use all passed sockets (if this feature is enabled)
     ///
     #[cfg_attr(
         not(any(target_os = "linux", target_os = "android")),
