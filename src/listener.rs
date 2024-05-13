@@ -49,6 +49,8 @@ impl std::fmt::Debug for Listener {
             ListenerImpl::Unix { .. } => f.write_str("tokio_listener::Listener(unix)"),
             #[cfg(feature = "inetd")]
             ListenerImpl::Stdio(_) => f.write_str("tokio_listener::Listener(stdio)"),
+            #[cfg(feature = "multi-listener")]
+            ListenerImpl::Multi(ref x) => write!(f, "tokio_listener::Listener(multi, n={})", x.v.len()),
         }
     }
 }
@@ -313,6 +315,41 @@ impl Listener {
             timeout: None,
         })
     }
+
+    /// Create a listener that accepts connections on multipe sockets simultaneously.
+    /// 
+    /// Fails if `addrs` is empty slice or if any of the parts failed to initialise.
+    /// 
+    /// See documentation of [`bind`] method for other help.
+    #[cfg_attr(docsrs_alt, doc(cfg(feature = "multi-listener")))]
+    #[cfg(feature = "multi-listener")]
+    pub async fn bind_multiple(
+        addrs: &[ListenerAddress],
+        sys_opts: &SystemOptions,
+        usr_opts: &UserOptions,
+    ) -> std::io::Result<Self> {
+        if addrs.is_empty() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Attempt to bind tokio-listener without any address",
+            ));
+        }
+        if addrs.len() == 1 {
+            return Listener::bind(&addrs[0], sys_opts, usr_opts).await;
+        }
+        let mut v = Vec::with_capacity(addrs.len());
+        for addr in addrs {
+            debug!("Binding {addr}");
+            let l = Listener::bind(addr, sys_opts, usr_opts).await?;
+            v.push(l.i);
+        }
+        Ok(Listener {
+            i: ListenerImpl::Multi(ListenerImplMulti {v}),
+            sleep_on_errors: sys_opts.sleep_on_errors,
+            timeout: None,
+        })
+    }
+
 }
 
 #[cfg(feature = "inetd")]
@@ -413,13 +450,8 @@ impl Listener {
             }
             self.timeout = None;
 
-            let ret = match &mut self.i {
-                ListenerImpl::Tcp(ti) => ti.poll_accept(cx),
-                #[cfg(all(feature = "unix", unix))]
-                ListenerImpl::Unix(ui) => ui.poll_accept(cx),
-                #[cfg(feature = "inetd")]
-                ListenerImpl::Stdio(x) => return x.poll_accept(cx),
-            };
+            let ret =self.i.poll_accept(cx);
+
             let e: std::io::Error = match ret {
                 Poll::Ready(Err(e)) => e,
                 Poll::Ready(Ok(x)) => return Poll::Ready(Ok(x)),
@@ -495,12 +527,36 @@ pub(crate) struct ListenerImplUnix {
     send_buffer_size: Option<usize>,
 }
 
+#[cfg(feature="multi-listener")]
+pub(crate) struct ListenerImplMulti {
+    pub(crate) v : Vec<ListenerImpl>,
+}
+
 pub(crate) enum ListenerImpl {
     Tcp(ListenerImplTcp),
     #[cfg(all(feature = "unix", unix))]
     Unix(ListenerImplUnix),
     #[cfg(feature = "inetd")]
     Stdio(StdioListener),
+    #[cfg(feature="multi-listener")]
+    Multi(ListenerImplMulti),
+}
+
+impl ListenerImpl {
+    fn poll_accept(
+        &mut self,
+        cx: &mut Context<'_>,
+    ) -> Poll<std::io::Result<(Connection, SomeSocketAddr)>> {
+        match self {
+            ListenerImpl::Tcp(ti) => ti.poll_accept(cx),
+            #[cfg(all(feature = "unix", unix))]
+            ListenerImpl::Unix(ui) => ui.poll_accept(cx),
+            #[cfg(feature = "inetd")]
+            ListenerImpl::Stdio(x) => return x.poll_accept(cx),
+            #[cfg(feature="multi-listener")]
+            ListenerImpl::Multi(x) => return x.poll_accept(cx),
+        }
+    }
 }
 
 impl ListenerImplTcp {
@@ -570,6 +626,22 @@ impl ListenerImplUnix {
             }
             Poll::Pending => Poll::Pending,
         }
+    }
+}
+
+#[cfg(feature="multi-listener")]
+impl ListenerImplMulti {
+    fn poll_accept(
+        &mut self,
+        cx: &mut Context<'_>,
+    ) -> Poll<std::io::Result<(Connection, SomeSocketAddr)>> {
+        for s in self.v.iter_mut() {
+            match s.poll_accept(cx) {
+                Poll::Ready(x) => return Poll::Ready(x),
+                Poll::Pending => (),
+            }
+        }
+        Poll::Pending
     }
 }
 

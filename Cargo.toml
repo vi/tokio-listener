@@ -78,6 +78,8 @@ tonic011 = ["dep:tonic"]
 ## Enable [`tokio_util::net::Listener`] implementation for [`Listener`].
 tokio-util = ["dep:tokio-util"]
 
+multi-listener = []
+
 [dev-dependencies]
 anyhow = "1.0.71"
 argh = "0.1.10"

@@ -24,6 +24,8 @@ impl tokio_util::net::Listener for crate::Listener {
             }
             #[cfg(feature = "inetd")]
             crate::listener::ListenerImpl::Stdio(_) => Ok(SomeSocketAddr::Stdio),
+            #[cfg(feature = "multi-listener")]
+            crate::listener::ListenerImpl::Multi(_) => Ok(SomeSocketAddr::Multiple),
         }
     }
 }
