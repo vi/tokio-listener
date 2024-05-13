@@ -114,7 +114,8 @@ Arguments:
           
           * Special keyword "inetd" for serving one connection from stdin/stdout
           
-          * Special keyword "sd-listen" or "sd-listen-unix" to accept connections from file descriptor 3 (e.g. systemd socket activation)
+          * Special keyword "sd-listen" to accept connections from file descriptor 3 (e.g. systemd socket activation).
+            You can also specify a named descriptor after a colon.
 
   <TEXT_TO_SERVE>
           Line of text to return as a body of incoming requests
