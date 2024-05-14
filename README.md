@@ -11,7 +11,7 @@ While it is a solid default choice, sometimes more flexibility is desired, espec
 
 * Listening UNIX socket instead of TCP socket. It is triggered by beginning the address with `.` or `/`.
 * Listening abstract-namespaced UNIX socket on Linux. It is triggered by beginning the address with `@`.
-* Accepting connections from a pre-opened socket inherited from parent process (e.g. systemd). This is triggered by special address `sd-listen`.
+* Accepting connections from a pre-opened socket inherited from parent process (e.g. systemd). This is triggered by special address `sd-listen`. You can also request a specific named or all sockets.
 * Inetd mode - stdin/stdout can also be used for serving one connection.
 
 ## Other 
@@ -22,6 +22,7 @@ While it is a solid default choice, sometimes more flexibility is desired, espec
 * For UNIX path sockets, it supports unlinking, chowning and chmodding the file per user request.
 * `axum 0.7` integration.
 * Multi-listener - easy was to bind to multiple ports simulteneously. Combined with systemd support, also allows to trigger multi-listen using special `sd-listen:*` address. Not enabled by default.
+* Fine-grained compile-time feature switches. Without features it should basically reduce to a thin wrapper around plain `TcpListener`.
 
 # Examples
 
