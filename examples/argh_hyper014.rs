@@ -37,22 +37,21 @@ struct Args {
     sd_accept_ignore_environment: bool,
 
     /// set SO_KEEPALIVE settings for each accepted TCP connection.
-    /// 
+    ///
     /// Value is a colon-separated triplet of time_ms:count:interval_ms, each of which is optional.
     #[argh(option)]
-    tcp_keepalive : Option<TcpKeepaliveParams>,
-    
+    tcp_keepalive: Option<TcpKeepaliveParams>,
 
     /// try to set SO_REUSEPORT, so that multiple processes can accept connections from the same port in a round-robin fashion
     #[argh(switch)]
-    tcp_reuse_port : bool,
+    tcp_reuse_port: bool,
 
     /// set socket's SO_RCVBUF value
     #[argh(option)]
-    recv_buffer_size  : Option<usize>,
+    recv_buffer_size: Option<usize>,
     /// set socket's SO_SNDBUF value
     #[argh(option)]
-    send_buffer_size : Option<usize>,
+    send_buffer_size: Option<usize>,
 
     /// set socket's IPV6_V6ONLY to true, to avoid receiving IPv4 connections on IPv6 socket
     #[argh(switch)]
@@ -60,7 +59,7 @@ struct Args {
 
     /// maximum number of pending unaccepted connections
     #[argh(option)]
-    tcp_listen_backlog : Option<u32>,
+    tcp_listen_backlog: Option<u32>,
 
     /// text to return in all requests
     #[argh(positional)]
@@ -86,7 +85,9 @@ async fn main() -> anyhow::Result<()> {
     user_options.tcp_only_v6 = args.tcp_only_v6;
     user_options.tcp_listen_backlog = args.tcp_listen_backlog;
 
-    let listener = tokio_listener::Listener::bind(&args.listen_address, &system_options, &user_options).await?;
+    let listener =
+        tokio_listener::Listener::bind(&args.listen_address, &system_options, &user_options)
+            .await?;
 
     let make_svc = make_service_fn(move |_| {
         let text = args.text.clone();

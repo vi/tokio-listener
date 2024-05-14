@@ -1,6 +1,5 @@
 use std::{fmt::Display, net::SocketAddr, path::PathBuf, str::FromStr};
 
-
 /// Abstraction over socket address that instructs in which way and at what address (if any) [`Listener`]
 /// should listen for incoming stream connections.
 ///
@@ -50,11 +49,10 @@ pub enum ListenerAddress {
     FromFd(i32),
     /// SystemD's "Accept=no" mode - relying on `LISTEN_FDNAMES` environment variable instead of using the hard coded number
     /// Triggered by using appending a colon and a name after `sd-listen`. Example: `sd-listen:mynamedsock`
-    /// 
+    ///
     /// Special name `*` means to bind all passed addresses simultaneously, if `multi-listener` crate feature is enabled.
     FromFdNamed(String),
 }
-
 
 pub(crate) const SD_LISTEN_FDS_START: i32 = 3;
 
@@ -76,7 +74,10 @@ impl FromStr for ListenerAddress {
             Ok(ListenerAddress::FromFd(SD_LISTEN_FDS_START))
         // No easy `strip_prefix_ignore_ascii_case` in Rust stdlib,
         // so this specific variant is not reachable for upper case end users as well.
-        } else if let Some(x) = s.strip_prefix("sd-listen:").or(s.strip_prefix("sd_listen:")) {
+        } else if let Some(x) = s
+            .strip_prefix("sd-listen:")
+            .or(s.strip_prefix("sd_listen:"))
+        {
             if x.contains(':') {
                 return Err("Invalid tokio-listener sd-listen: name");
             }
@@ -123,7 +124,6 @@ impl Display for ListenerAddress {
         }
     }
 }
-
 
 #[cfg(feature = "sd_listen")]
 // based on https://docs.rs/sd-notify/0.4.1/src/sd_notify/lib.rs.html#164, but simplified

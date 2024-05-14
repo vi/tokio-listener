@@ -103,8 +103,6 @@ pub struct UserOptions {
     pub tcp_listen_backlog: Option<u32>,
 }
 
-
-
 /// Listener options that are supposed to be hard coded in the code
 /// (not configurable by user)
 #[non_exhaustive]

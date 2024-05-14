@@ -1,7 +1,6 @@
 #[allow(unused_imports)]
 use std::{fmt::Display, net::SocketAddr, sync::Arc};
 
-
 /// Some form of accepted connection's address.
 /// Variant depends on variant used in [`ListenerAddress`].
 #[derive(Debug)]

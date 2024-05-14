@@ -346,7 +346,7 @@ where
                     conn = tokio_listener_accept(&mut tokio_listener) => {
                         match conn {
                             Some(conn) => conn,
-                            None => { 
+                            None => {
                                 if tokio_listener.no_more_connections() {
                                     break;
                                 }

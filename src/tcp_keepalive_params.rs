@@ -1,6 +1,5 @@
 use std::{fmt::Display, str::FromStr, time::Duration};
 
-
 #[cfg(feature = "socket_options")]
 #[cfg_attr(docsrs_alt, doc(cfg(feature = "socket_options")))]
 /// Value of `--tcp-keepalive` option.

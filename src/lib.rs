@@ -59,14 +59,14 @@
     allow(unused_imports, irrefutable_let_patterns, unused_variables)
 )]
 
+mod connection;
+mod error;
+mod listener;
+mod listener_address;
+mod options;
+mod some_socket_addr;
 mod tcp_keepalive_params;
 mod unix_chmod;
-mod options;
-mod listener_address;
-mod listener;
-mod connection;
-mod some_socket_addr;
-mod error;
 
 #[cfg(feature = "unix_path_tools")]
 #[doc(inline)]
@@ -77,7 +77,7 @@ pub use unix_chmod::UnixChmodVariant;
 pub use tcp_keepalive_params::TcpKeepaliveParams;
 
 #[doc(inline)]
-pub use options::{UserOptions, SystemOptions};
+pub use options::{SystemOptions, UserOptions};
 
 #[doc(inline)]
 pub use listener_address::ListenerAddress;
@@ -92,7 +92,7 @@ pub(crate) use listener::is_connection_error;
 pub use connection::Connection;
 
 #[doc(inline)]
-pub use some_socket_addr::{SomeSocketAddr,SomeSocketAddrClonable};
+pub use some_socket_addr::{SomeSocketAddr, SomeSocketAddrClonable};
 
 #[cfg(feature = "clap")]
 #[cfg_attr(docsrs_alt, doc(cfg(feature = "clap")))]
@@ -123,4 +123,4 @@ mod tonic011;
 mod tokioutil;
 
 #[doc(inline)]
-pub use error::{BindError, AcceptError};
+pub use error::{AcceptError, BindError};

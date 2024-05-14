@@ -1,7 +1,5 @@
 use std::{fmt::Display, str::FromStr};
 
-
-
 #[cfg_attr(docsrs_alt, doc(cfg(feature = "unix_path_tools")))]
 #[cfg(feature = "unix_path_tools")]
 /// Value of `--unix-listen-chmod` option which allows changing DAC file access mode for UNIX path socket

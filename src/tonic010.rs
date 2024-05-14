@@ -1,6 +1,6 @@
-use tonic_010::transport::server::{Connected, TcpConnectInfo};
 #[cfg(all(feature = "unix", unix))]
 use tonic_010::transport::server::UdsConnectInfo;
+use tonic_010::transport::server::{Connected, TcpConnectInfo};
 
 use crate::Connection;
 

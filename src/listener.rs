@@ -50,7 +50,9 @@ impl std::fmt::Debug for Listener {
             #[cfg(feature = "inetd")]
             ListenerImpl::Stdio(_) => f.write_str("tokio_listener::Listener(stdio)"),
             #[cfg(feature = "multi-listener")]
-            ListenerImpl::Multi(ref x) => write!(f, "tokio_listener::Listener(multi, n={})", x.v.len()),
+            ListenerImpl::Multi(ref x) => {
+                write!(f, "tokio_listener::Listener(multi, n={})", x.v.len())
+            }
         }
     }
 }
@@ -81,7 +83,10 @@ async fn listen_tcp(
             s.bind(&socket2::SockAddr::from(*a))?;
             let backlog = usr_opts.tcp_listen_backlog.unwrap_or(1024);
             let Ok(backlog): Result<c_int, _> = backlog.try_into() else {
-                return crate::error::BindError::InvalidUserOption { name: "tcp_listen_backlog" }.to_io();
+                return crate::error::BindError::InvalidUserOption {
+                    name: "tcp_listen_backlog",
+                }
+                .to_io();
             };
             s.listen(backlog)?;
             s.set_nonblocking(true)?;
@@ -175,7 +180,12 @@ fn listen_from_fd(
 
     use crate::{listener_address::check_env_for_fd, BindError};
     if !usr_opts.sd_accept_ignore_environment && check_env_for_fd(fdnum).is_none() {
-        return BindError::EvnVarError{ reason: "ensure specified file descriptor is valid to use as a socket", var: "LISTEN_PID or LISTEN_FDS", fault: "does not contain what we expect" }.to_io();
+        return BindError::EvnVarError {
+            reason: "ensure specified file descriptor is valid to use as a socket",
+            var: "LISTEN_PID or LISTEN_FDS",
+            fault: "does not contain what we expect",
+        }
+        .to_io();
     }
     let fd: RawFd = (fdnum).into();
 
@@ -188,17 +198,23 @@ fn listen_from_fd(
     let fd = s.into_raw_fd();
 
     if unix {
-        #[cfg(not(feature = "unix"))] {
-            return BindError::MissingCompileTimeFeature { reason: "use inherited UNIX socket", feature: "unix" }.to_io();
+        #[cfg(not(feature = "unix"))]
+        {
+            return BindError::MissingCompileTimeFeature {
+                reason: "use inherited UNIX socket",
+                feature: "unix",
+            }
+            .to_io();
         }
-        #[cfg(feature = "unix")] {
+        #[cfg(feature = "unix")]
+        {
             let s = unsafe { std::os::unix::net::UnixListener::from_raw_fd(fd) };
             s.set_nonblocking(true)?;
             Ok(ListenerImpl::Unix(ListenerImplUnix {
                 s: UnixListener::from_std(s)?,
                 #[cfg(feature = "socket_options")]
                 send_buffer_size: usr_opts.send_buffer_size,
-        
+
                 #[cfg(feature = "socket_options")]
                 recv_buffer_size: usr_opts.recv_buffer_size,
             }))
@@ -222,7 +238,6 @@ fn listen_from_fd(
     }
 }
 
-
 #[cfg(all(feature = "sd_listen", unix))]
 fn listen_from_fd_named(
     usr_opts: &UserOptions,
@@ -231,20 +246,25 @@ fn listen_from_fd_named(
 ) -> Result<ListenerImpl, std::io::Error> {
     use crate::error::BindError;
 
-
     if fdname == "*" {
-        #[cfg(not(feature = "multi-listener"))] {
-            return BindError::MissingCompileTimeFeature { reason: "bind to all inherited sockets", feature: "multi-listener" }.to_io();
+        #[cfg(not(feature = "multi-listener"))]
+        {
+            return BindError::MissingCompileTimeFeature {
+                reason: "bind to all inherited sockets",
+                feature: "multi-listener",
+            }
+            .to_io();
         }
 
-        #[cfg(feature = "multi-listener")] {
+        #[cfg(feature = "multi-listener")]
+        {
             return listen_from_fd_all(usr_opts, sys_opts);
         }
     }
 
     let listen_fdnames = crate::error::get_envvar("use named file descriptor", "LISTEN_FDNAMES")?;
 
-    let mut fd : RawFd = crate::listener_address::SD_LISTEN_FDS_START as RawFd;
+    let mut fd: RawFd = crate::listener_address::SD_LISTEN_FDS_START as RawFd;
     for name in listen_fdnames.split(':') {
         debug!("Considering LISTEN_FDNAMES chunk {name}");
         if name == fdname {
@@ -258,30 +278,43 @@ fn listen_from_fd_named(
         reason: "use named file descriptor",
         var: "LISTEN_FDNAMES",
         fault: "does not contain the user-requested named file descriptor",
-    }.to_io()
+    }
+    .to_io()
 }
 
-#[cfg(all(feature = "sd_listen", unix, feature="multi-listener"))]
+#[cfg(all(feature = "sd_listen", unix, feature = "multi-listener"))]
 fn listen_from_fd_all(
     usr_opts: &UserOptions,
     sys_opts: &SystemOptions,
 ) -> Result<ListenerImpl, std::io::Error> {
     use crate::{listener_address::SD_LISTEN_FDS_START, BindError};
+    #[allow(unused_imports)]
     use futures_util::FutureExt;
 
-
     let listen_fds = crate::error::get_envvar("use all inherited file descriptors", "LISTEN_FDS")?;
-    let n : i32 = match listen_fds.parse() {
-        Ok(x) if x > 0 && x < 4096  => x,
-        _ => return BindError::EvnVarError{ reason: "use all inherited file descriptors", var: "LISTEN_FDS", fault: "bad value" }.to_io(),
+    let n: i32 = match listen_fds.parse() {
+        Ok(x) if x > 0 && x < 4096 => x,
+        _ => {
+            return BindError::EvnVarError {
+                reason: "use all inherited file descriptors",
+                var: "LISTEN_FDS",
+                fault: "bad value",
+            }
+            .to_io()
+        }
     };
 
     debug!("Parsed LISTEN_FDS");
 
-    let addrs = Vec::from_iter((SD_LISTEN_FDS_START..(SD_LISTEN_FDS_START+n)).map(|x|ListenerAddress::FromFd(x)));
-    
+    let addrs = Vec::from_iter(
+        (SD_LISTEN_FDS_START..(SD_LISTEN_FDS_START + n)).map(|x| ListenerAddress::FromFd(x)),
+    );
+
     // Only new TCP sockets actually require real awaiting, everything else can be fast-forwarded
-    Ok(Listener::bind_multiple(&addrs, sys_opts, usr_opts).now_or_never().unwrap()?.i)
+    Ok(Listener::bind_multiple(&addrs, sys_opts, usr_opts)
+        .now_or_never()
+        .unwrap()?
+        .i)
 }
 
 impl Listener {
@@ -319,36 +352,65 @@ impl Listener {
             #[cfg(all(feature = "sd_listen", unix))]
             ListenerAddress::FromFd(fdnum) => listen_from_fd(usr_opts, *fdnum, sys_opts)?,
             #[cfg(all(feature = "sd_listen", unix))]
-            ListenerAddress::FromFdNamed(fdname) => listen_from_fd_named(usr_opts, fdname, sys_opts)?,
+            ListenerAddress::FromFdNamed(fdname) => {
+                listen_from_fd_named(usr_opts, fdname, sys_opts)?
+            }
             #[allow(unreachable_patterns)]
             _ => {
                 #[allow(unused_imports)]
-                use crate::BindError::{MissingCompileTimeFeature,MissingPlatformSupport};
+                use crate::BindError::{MissingCompileTimeFeature, MissingPlatformSupport};
                 let err = match addr {
                     ListenerAddress::Tcp(_) => unreachable!(),
                     ListenerAddress::Path(_) => {
-                        #[cfg(unix)] {
-                            MissingCompileTimeFeature { reason: "bind UNIX path socket", feature: "UNIX-like platform" }
+                        #[cfg(unix)]
+                        {
+                            MissingCompileTimeFeature {
+                                reason: "bind UNIX path socket",
+                                feature: "UNIX-like platform",
+                            }
                         }
-                        #[cfg(not(unix))] {
-                            MissingCompileTimeFeature { reason: "bind UNIX path socket", feature: "unix"  }
+                        #[cfg(not(unix))]
+                        {
+                            MissingCompileTimeFeature {
+                                reason: "bind UNIX path socket",
+                                feature: "unix",
+                            }
                         }
                     }
-                    ListenerAddress::Abstract(_) =>{
-                        #[cfg(any(target_os = "linux", target_os = "android"))] {
-                            MissingCompileTimeFeature { reason: "bind abstract-namespaced UNIX socket", feature: "Linux or Android platform" }
+                    ListenerAddress::Abstract(_) => {
+                        #[cfg(any(target_os = "linux", target_os = "android"))]
+                        {
+                            MissingCompileTimeFeature {
+                                reason: "bind abstract-namespaced UNIX socket",
+                                feature: "Linux or Android platform",
+                            }
                         }
-                        #[cfg(not(any(target_os = "linux", target_os = "android")))] {
-                            MissingCompileTimeFeature { reason: "bind abstract-namespaced UNIX socket", feature: "unix"  }
+                        #[cfg(not(any(target_os = "linux", target_os = "android")))]
+                        {
+                            MissingCompileTimeFeature {
+                                reason: "bind abstract-namespaced UNIX socket",
+                                feature: "unix",
+                            }
                         }
                     }
-                    ListenerAddress::Inetd => MissingCompileTimeFeature { reason: "use stdin/stdout as a socket", feature: "inetd" },
-                    ListenerAddress::FromFd(_) | ListenerAddress::FromFdNamed(_)  => {
-                        #[cfg(unix)] {
-                            MissingCompileTimeFeature { reason: "use inherited file descriptor", feature: "UNIX-like platform" }
+                    ListenerAddress::Inetd => MissingCompileTimeFeature {
+                        reason: "use stdin/stdout as a socket",
+                        feature: "inetd",
+                    },
+                    ListenerAddress::FromFd(_) | ListenerAddress::FromFdNamed(_) => {
+                        #[cfg(unix)]
+                        {
+                            MissingCompileTimeFeature {
+                                reason: "use inherited file descriptor",
+                                feature: "UNIX-like platform",
+                            }
                         }
-                        #[cfg(not(unix))] {
-                            MissingCompileTimeFeature { reason: "use inherited file descriptor", feature: "sd_listen"  }
+                        #[cfg(not(unix))]
+                        {
+                            MissingCompileTimeFeature {
+                                reason: "use inherited file descriptor",
+                                feature: "sd_listen",
+                            }
                         }
                     }
                 };
@@ -363,9 +425,9 @@ impl Listener {
     }
 
     /// Create a listener that accepts connections on multipe sockets simultaneously.
-    /// 
+    ///
     /// Fails if `addrs` is empty slice or if any of the parts failed to initialise.
-    /// 
+    ///
     /// See documentation of [`bind`] method for other help.
     #[cfg_attr(docsrs_alt, doc(cfg(feature = "multi-listener")))]
     #[cfg(feature = "multi-listener")]
@@ -387,12 +449,11 @@ impl Listener {
             v.push(l.i);
         }
         Ok(Listener {
-            i: ListenerImpl::Multi(ListenerImplMulti {v}),
+            i: ListenerImpl::Multi(ListenerImplMulti { v }),
             sleep_on_errors: sys_opts.sleep_on_errors,
             timeout: None,
         })
     }
-
 }
 
 #[cfg(feature = "inetd")]
@@ -493,7 +554,7 @@ impl Listener {
             }
             self.timeout = None;
 
-            let ret =self.i.poll_accept(cx);
+            let ret = self.i.poll_accept(cx);
 
             let e: std::io::Error = match ret {
                 Poll::Ready(Err(e)) => e,
@@ -570,9 +631,9 @@ pub(crate) struct ListenerImplUnix {
     send_buffer_size: Option<usize>,
 }
 
-#[cfg(feature="multi-listener")]
+#[cfg(feature = "multi-listener")]
 pub(crate) struct ListenerImplMulti {
-    pub(crate) v : Vec<ListenerImpl>,
+    pub(crate) v: Vec<ListenerImpl>,
 }
 
 pub(crate) enum ListenerImpl {
@@ -581,7 +642,7 @@ pub(crate) enum ListenerImpl {
     Unix(ListenerImplUnix),
     #[cfg(feature = "inetd")]
     Stdio(StdioListener),
-    #[cfg(feature="multi-listener")]
+    #[cfg(feature = "multi-listener")]
     Multi(ListenerImplMulti),
 }
 
@@ -596,7 +657,7 @@ impl ListenerImpl {
             ListenerImpl::Unix(ui) => ui.poll_accept(cx),
             #[cfg(feature = "inetd")]
             ListenerImpl::Stdio(x) => return x.poll_accept(cx),
-            #[cfg(feature="multi-listener")]
+            #[cfg(feature = "multi-listener")]
             ListenerImpl::Multi(x) => return x.poll_accept(cx),
         }
     }
@@ -672,7 +733,7 @@ impl ListenerImplUnix {
     }
 }
 
-#[cfg(feature="multi-listener")]
+#[cfg(feature = "multi-listener")]
 impl ListenerImplMulti {
     fn poll_accept(
         &mut self,

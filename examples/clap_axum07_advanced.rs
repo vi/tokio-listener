@@ -44,7 +44,9 @@ async fn main() -> anyhow::Result<()> {
         listener,
         app.into_make_service_with_connect_info::<tokio_listener::SomeSocketAddrClonable>(),
     )
-    .with_graceful_shutdown(async move { let _ = shutdown_rx.recv().await; })
+    .with_graceful_shutdown(async move {
+        let _ = shutdown_rx.recv().await;
+    })
     .await?;
 
     Ok(())

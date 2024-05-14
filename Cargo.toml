@@ -78,6 +78,7 @@ tonic011 = ["dep:tonic"]
 ## Enable [`tokio_util::net::Listener`] implementation for [`Listener`].
 tokio-util = ["dep:tokio-util"]
 
+## Enable [`Listener::bind_multiple`] and `sd-listen:*` (if combined with `sd_listen` feature)
 multi-listener = ["dep:futures-util"]
 
 [dev-dependencies]
