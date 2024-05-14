@@ -1,6 +1,6 @@
 #[cfg_attr(feature = "clap", derive(clap::Args))]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-#[allow(clippy::struct_excessive_bools)]
+#[allow(clippy::struct_excessive_bools, clippy::doc_markdown)]
 #[derive(Debug, Default)]
 #[non_exhaustive]
 /// User options that supplement listening address.

@@ -1,5 +1,5 @@
 /// `tokio-listener`-specific bind errors, to be packed in [`std::io::Error::other`].
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[allow(missing_docs)]
 #[non_exhaustive]
 pub enum BindError {
@@ -44,7 +44,7 @@ impl std::fmt::Display for BindError {
 }
 
 impl BindError {
-    pub(crate) fn to_io<T>(self) -> Result<T, std::io::Error> {
+    pub(crate) fn ioerr<T>(self) -> Result<T, std::io::Error> {
         Err(std::io::Error::new(std::io::ErrorKind::Other, self))
     }
 }
@@ -62,19 +62,19 @@ pub(crate) fn get_envvar(
                 var,
                 fault: "not present",
             }
-            .to_io(),
+            .ioerr(),
             std::env::VarError::NotUnicode(..) => BindError::EvnVarError {
                 reason,
                 var,
                 fault: "not unicode",
             }
-            .to_io(),
+            .ioerr(),
         },
     }
 }
 
 /// `tokio-listener`-specific accept errors, to be packed in [`std::io::Error::other`].
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[allow(missing_docs)]
 #[non_exhaustive]
 pub enum AcceptError {

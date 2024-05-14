@@ -1,6 +1,6 @@
 #![cfg_attr(docsrs_alt, feature(doc_cfg))]
 #![warn(missing_docs)]
-#![allow(clippy::useless_conversion)]
+#![allow(clippy::useless_conversion, clippy::module_name_repetitions)]
 //! Library for abstracting over TCP server sockets, UNIX server sockets, inetd-like mode.
 //!
 //! [`ListenerAddress`] is like `SocketAddr` and [`Listener`] is like `TcpListener`, but with more flexibility.

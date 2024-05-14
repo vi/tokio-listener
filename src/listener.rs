@@ -86,7 +86,7 @@ async fn listen_tcp(
                 return crate::error::BindError::InvalidUserOption {
                     name: "tcp_listen_backlog",
                 }
-                .to_io();
+                .ioerr();
             };
             s.listen(backlog)?;
             s.set_nonblocking(true)?;
@@ -185,7 +185,7 @@ fn listen_from_fd(
             var: "LISTEN_PID or LISTEN_FDS",
             fault: "does not contain what we expect",
         }
-        .to_io();
+        .ioerr();
     }
     let fd: RawFd = (fdnum).into();
 
@@ -204,7 +204,7 @@ fn listen_from_fd(
                 reason: "use inherited UNIX socket",
                 feature: "unix",
             }
-            .to_io();
+            .ioerr();
         }
         #[cfg(feature = "unix")]
         {
@@ -253,7 +253,7 @@ fn listen_from_fd_named(
                 reason: "bind to all inherited sockets",
                 feature: "multi-listener",
             }
-            .to_io();
+            .ioerr();
         }
 
         #[cfg(feature = "multi-listener")]
@@ -279,7 +279,7 @@ fn listen_from_fd_named(
         var: "LISTEN_FDNAMES",
         fault: "does not contain the user-requested named file descriptor",
     }
-    .to_io()
+    .ioerr()
 }
 
 #[cfg(all(feature = "sd_listen", unix, feature = "multi-listener"))]
@@ -300,7 +300,7 @@ fn listen_from_fd_all(
                 var: "LISTEN_FDS",
                 fault: "bad value",
             }
-            .to_io()
+            .ioerr()
         }
     };
 
@@ -414,7 +414,7 @@ impl Listener {
                         }
                     }
                 };
-                return err.to_io();
+                return err.ioerr();
             }
         };
         Ok(Listener {
@@ -437,7 +437,7 @@ impl Listener {
         usr_opts: &UserOptions,
     ) -> std::io::Result<Self> {
         if addrs.is_empty() {
-            return crate::error::BindError::MultiBindWithoutAddresses.to_io();
+            return crate::error::BindError::MultiBindWithoutAddresses.ioerr();
         }
         if addrs.len() == 1 {
             return Listener::bind(&addrs[0], sys_opts, usr_opts).await;
@@ -556,6 +556,11 @@ impl Listener {
 
             let ret = self.i.poll_accept(cx);
 
+            #[cfg(feature = "inetd")]
+            if matches!(self.i, ListenerImpl::Stdio(..)) {
+                return ret;
+            }
+
             let e: std::io::Error = match ret {
                 Poll::Ready(Err(e)) => e,
                 Poll::Ready(Ok(x)) => return Poll::Ready(Ok(x)),
@@ -656,9 +661,9 @@ impl ListenerImpl {
             #[cfg(all(feature = "unix", unix))]
             ListenerImpl::Unix(ui) => ui.poll_accept(cx),
             #[cfg(feature = "inetd")]
-            ListenerImpl::Stdio(x) => return x.poll_accept(cx),
+            ListenerImpl::Stdio(x) => x.poll_accept(cx),
             #[cfg(feature = "multi-listener")]
-            ListenerImpl::Multi(x) => return x.poll_accept(cx),
+            ListenerImpl::Multi(x) => x.poll_accept(cx),
         }
     }
 }

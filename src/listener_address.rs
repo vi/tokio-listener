@@ -66,9 +66,9 @@ impl FromStr for ListenerAddress {
             Ok(ListenerAddress::Abstract(x.to_owned()))
         } else if s.eq_ignore_ascii_case("inetd") || s.eq_ignore_ascii_case("stdio") || s == "-" {
             Ok(ListenerAddress::Inetd)
-        } else if s.eq_ignore_ascii_case("sd-listen") || s.eq_ignore_ascii_case("sd_listen") {
-            Ok(ListenerAddress::FromFd(SD_LISTEN_FDS_START))
-        } else if s.eq_ignore_ascii_case("sd-listen-unix")
+        } else if s.eq_ignore_ascii_case("sd-listen")
+            || s.eq_ignore_ascii_case("sd_listen")
+            || s.eq_ignore_ascii_case("sd-listen-unix")
             || s.eq_ignore_ascii_case("sd_listen_unix")
         {
             Ok(ListenerAddress::FromFd(SD_LISTEN_FDS_START))
