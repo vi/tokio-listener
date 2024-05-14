@@ -66,6 +66,7 @@ mod listener_address;
 mod listener;
 mod connection;
 mod some_socket_addr;
+mod error;
 
 #[cfg(feature = "unix_path_tools")]
 #[doc(inline)]
@@ -120,3 +121,6 @@ mod tonic011;
 #[cfg(feature = "tokio-util")]
 #[cfg_attr(docsrs_alt, doc(cfg(feature = "tokio-util")))]
 mod tokioutil;
+
+#[doc(inline)]
+pub use error::{BindError, AcceptError};

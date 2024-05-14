@@ -81,7 +81,7 @@ async fn listen_tcp(
             s.bind(&socket2::SockAddr::from(*a))?;
             let backlog = usr_opts.tcp_listen_backlog.unwrap_or(1024);
             let Ok(backlog): Result<c_int, _> = backlog.try_into() else {
-                return Err(std::io::Error::other("Invalid socket listen backlog value"));
+                return crate::error::BindError::InvalidUserOption { name: "tcp_listen_backlog" }.to_io();
             };
             s.listen(backlog)?;
             s.set_nonblocking(true)?;
@@ -173,12 +173,9 @@ fn listen_from_fd(
 
     use std::os::fd::IntoRawFd;
 
-    use crate::listener_address::check_env_for_fd;
+    use crate::{listener_address::check_env_for_fd, BindError};
     if !usr_opts.sd_accept_ignore_environment && check_env_for_fd(fdnum).is_none() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "Failed LISTEN_PID or LISTEN_FDS environment check for sd-listen mode",
-        ));
+        return BindError::EvnVarError{ reason: "ensure specified file descriptor is valid to use as a socket", var: "LISTEN_PID or LISTEN_FDS", fault: "does not contain what we expect" }.to_io();
     }
     let fd: RawFd = (fdnum).into();
 
@@ -192,10 +189,7 @@ fn listen_from_fd(
 
     if unix {
         #[cfg(not(feature = "unix"))] {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "Socket inherited using sd-listen points to a UNIX-domain socket, but this feature was not selected at compile time in tokio-listener",
-            ));
+            return BindError::MissingCompileTimeFeature { reason: "use inherited UNIX socket", feature: "unix" }.to_io();
         }
         #[cfg(feature = "unix")] {
             let s = unsafe { std::os::unix::net::UnixListener::from_raw_fd(fd) };
@@ -235,13 +229,12 @@ fn listen_from_fd_named(
     fdname: &str,
     sys_opts: &SystemOptions,
 ) -> Result<ListenerImpl, std::io::Error> {
+    use crate::error::BindError;
+
 
     if fdname == "*" {
         #[cfg(not(feature = "multi-listener"))] {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("tokio-listener requested bind to all inherited sockets, but `multi-listener` feature was not enabled at compile time."),
-            ));
+            return BindError::MissingCompileTimeFeature { reason: "bind to all inherited sockets", feature: "multi-listener" }.to_io();
         }
 
         #[cfg(feature = "multi-listener")] {
@@ -249,19 +242,7 @@ fn listen_from_fd_named(
         }
     }
 
-    let listen_fdnames = match std::env::var("LISTEN_FDNAMES") {
-        Ok(x) => x,
-        Err(e) => match e {
-            std::env::VarError::NotPresent => return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "tokio-listener requested to use named inherited file descriptor, but no LISTEN_FDNAMES environment variable present",
-            )),
-            std::env::VarError::NotUnicode(_) => return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "tokio-listener requested to use named inherited file descriptor, but LISTEN_FDNAMES environment variable contains non-unicode content",
-            )),
-        }
-    };
+    let listen_fdnames = crate::error::get_envvar("use named file descriptor", "LISTEN_FDNAMES")?;
 
     let mut fd : RawFd = crate::listener_address::SD_LISTEN_FDS_START as RawFd;
     for name in listen_fdnames.split(':') {
@@ -271,11 +252,13 @@ fn listen_from_fd_named(
         }
         fd += 1;
     }
+    debug!("Not found {fdname}");
 
-    Err(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        format!("tokio-listener requested to use named inherited file descriptor {fdname}, but LISTEN_FDNAMES environment variable does not contain that chunk."),
-    ))
+    BindError::EvnVarError {
+        reason: "use named file descriptor",
+        var: "LISTEN_FDNAMES",
+        fault: "does not contain the user-requested named file descriptor",
+    }.to_io()
 }
 
 #[cfg(all(feature = "sd_listen", unix, feature="multi-listener"))]
@@ -283,29 +266,14 @@ fn listen_from_fd_all(
     usr_opts: &UserOptions,
     sys_opts: &SystemOptions,
 ) -> Result<ListenerImpl, std::io::Error> {
-    use crate::listener_address::SD_LISTEN_FDS_START;
+    use crate::{listener_address::SD_LISTEN_FDS_START, BindError};
     use futures_util::FutureExt;
 
 
-    let listen_fds = match std::env::var("LISTEN_FDS") {
-        Ok(x) => x,
-        Err(e) => match e {
-            std::env::VarError::NotPresent => return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "tokio-listener requested to use all named inherited file descriptor, but no LISTEN_FDS environment variable present",
-            )),
-            std::env::VarError::NotUnicode(_) => return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "tokio-listener requested to use all named inherited file descriptor, but LISTEN_FDS environment variable contains non-unicode content",
-            )),
-        }
-    };
+    let listen_fds = crate::error::get_envvar("use all inherited file descriptors", "LISTEN_FDS")?;
     let n : i32 = match listen_fds.parse() {
         Ok(x) if x > 0 && x < 4096  => x,
-        _ => return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "tokio-listener requested to use all named inherited file descriptor, LISTEN_FDS environment variable contains bad value",
-        )),
+        _ => return BindError::EvnVarError{ reason: "use all inherited file descriptors", var: "LISTEN_FDS", fault: "bad value" }.to_io(),
     };
 
     debug!("Parsed LISTEN_FDS");
@@ -354,10 +322,37 @@ impl Listener {
             ListenerAddress::FromFdNamed(fdname) => listen_from_fd_named(usr_opts, fdname, sys_opts)?,
             #[allow(unreachable_patterns)]
             _ => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "This tokio-listener mode is not supported on this platform or is disabled during compilation",
-                ));
+                #[allow(unused_imports)]
+                use crate::BindError::{MissingCompileTimeFeature,MissingPlatformSupport};
+                let err = match addr {
+                    ListenerAddress::Tcp(_) => unreachable!(),
+                    ListenerAddress::Path(_) => {
+                        #[cfg(unix)] {
+                            MissingCompileTimeFeature { reason: "bind UNIX path socket", feature: "UNIX-like platform" }
+                        }
+                        #[cfg(not(unix))] {
+                            MissingCompileTimeFeature { reason: "bind UNIX path socket", feature: "unix"  }
+                        }
+                    }
+                    ListenerAddress::Abstract(_) =>{
+                        #[cfg(any(target_os = "linux", target_os = "android"))] {
+                            MissingCompileTimeFeature { reason: "bind abstract-namespaced UNIX socket", feature: "Linux or Android platform" }
+                        }
+                        #[cfg(not(any(target_os = "linux", target_os = "android")))] {
+                            MissingCompileTimeFeature { reason: "bind abstract-namespaced UNIX socket", feature: "unix"  }
+                        }
+                    }
+                    ListenerAddress::Inetd => MissingCompileTimeFeature { reason: "use stdin/stdout as a socket", feature: "inetd" },
+                    ListenerAddress::FromFd(_) | ListenerAddress::FromFdNamed(_)  => {
+                        #[cfg(unix)] {
+                            MissingCompileTimeFeature { reason: "use inherited file descriptor", feature: "UNIX-like platform" }
+                        }
+                        #[cfg(not(unix))] {
+                            MissingCompileTimeFeature { reason: "use inherited file descriptor", feature: "sd_listen"  }
+                        }
+                    }
+                };
+                return err.to_io();
             }
         };
         Ok(Listener {
@@ -380,10 +375,7 @@ impl Listener {
         usr_opts: &UserOptions,
     ) -> std::io::Result<Self> {
         if addrs.is_empty() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "Attempt to bind tokio-listener without any address",
-            ));
+            return crate::error::BindError::MultiBindWithoutAddresses.to_io();
         }
         if addrs.len() == 1 {
             return Listener::bind(&addrs[0], sys_opts, usr_opts).await;
@@ -432,7 +424,7 @@ impl StdioListener {
                     trace!("finished waiting for liberation of stdout to stop listening loop");
                     Poll::Ready(Err(std::io::Error::new(
                         std::io::ErrorKind::Other,
-                        "stdin/stdout pseudosocket is already used",
+                        crate::error::AcceptError::InetdPseudosocketAlreadyTaken,
                     )))
                 }
                 Poll::Pending => Poll::Pending,
