@@ -366,14 +366,14 @@ impl Listener {
                         {
                             MissingCompileTimeFeature {
                                 reason: "bind UNIX path socket",
-                                feature: "UNIX-like platform",
+                                feature: "unix",
                             }
                         }
                         #[cfg(not(unix))]
                         {
-                            MissingCompileTimeFeature {
+                            MissingPlatformSupport {
                                 reason: "bind UNIX path socket",
-                                feature: "unix",
+                                feature: "UNIX-like platform",
                             }
                         }
                     }
@@ -382,14 +382,14 @@ impl Listener {
                         {
                             MissingCompileTimeFeature {
                                 reason: "bind abstract-namespaced UNIX socket",
-                                feature: "Linux or Android platform",
+                                feature: "unix",
                             }
                         }
                         #[cfg(not(any(target_os = "linux", target_os = "android")))]
                         {
-                            MissingCompileTimeFeature {
+                            MissingPlatformSupport {
                                 reason: "bind abstract-namespaced UNIX socket",
-                                feature: "unix",
+                                feature: "Linux or Android platform",
                             }
                         }
                     }
@@ -402,14 +402,14 @@ impl Listener {
                         {
                             MissingCompileTimeFeature {
                                 reason: "use inherited file descriptor",
-                                feature: "UNIX-like platform",
+                                feature: "sd_listen",
                             }
                         }
                         #[cfg(not(unix))]
                         {
-                            MissingCompileTimeFeature {
+                            MissingPlatformSupport {
                                 reason: "use inherited file descriptor",
-                                feature: "sd_listen",
+                                feature: "UNIX-like platform",
                             }
                         }
                     }
