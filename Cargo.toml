@@ -121,7 +121,7 @@ required-features = ["hyper014", "user_facing_default"]
 
 [[example]]
 name = "tonic"
-required-features = ["tonic011"]
+required-features = ["tonic012"]
 
 [package.metadata."docs.rs"]
 all-features = true
