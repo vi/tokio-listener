@@ -28,7 +28,8 @@ serde = { version = "1.0.171", features = ["derive"] , optional = true}
 serde_with = { version = "3.0.0", optional = true}
 socket2 = {version="0.5.3", optional=true, features=["all"]}
 tokio = { version = "1.29.1", features = ["net", "io-std", "time", "sync"] }
-tonic = { package = "tonic", version = "0.11.0", optional = true }
+tonic_012 = { package = "tonic", version = "0.12.0", optional = true }
+tonic_011 = { package = "tonic", version = "0.11.0", optional = true }
 tonic_010 = { package = "tonic", version = "0.10.2", optional = true }
 tracing = "0.1.37"
 axum07 = { version="0.7", package="axum", optional=true }
@@ -73,7 +74,10 @@ socket_options = ["socket2"]
 tonic010 = ["dep:tonic_010"]
 
 ## Enable `tonic(v0.11)::transport::server::Connected` implementation for [`Connection`]
-tonic011 = ["dep:tonic"]
+tonic011 = ["dep:tonic_011"]
+
+## Enable `tonic(v0.12)::transport::server::Connected` implementation for [`Connection`]
+tonic012 = ["dep:tonic_012"]
 
 ## Enable [`tokio_util::net::Listener`] implementation for [`Listener`].
 tokio-util = ["dep:tokio-util"]
@@ -90,7 +94,7 @@ hyper014 = { version = "0.14.27", features = ["server", "http1"], package="hyper
 tokio = { version = "1.29.1", features = ["macros", "rt", "io-util"] }
 tokio-test = "0.4.2"
 toml = "0.7.6"
-tonic-health = "0.11.0"
+tonic-health = "0.12.0"
 tracing-subscriber = "0.3.17"
 
 [[example]]

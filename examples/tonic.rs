@@ -1,5 +1,8 @@
 /// A simple example of how to use tokio-listener with a tonic gRPC server.
-use tonic::transport::Server;
+/// Keep in mind tokio-listener supports different tonic versions, and
+/// version-suffixes them.
+/// In your code, the crate would probably just be called "tonic".
+use tonic_012::transport::Server;
 use tonic_health::server::health_reporter;
 
 #[tokio::main(flavor = "current_thread")]
