@@ -19,7 +19,7 @@ use clap::Parser;
 ///    listener: tokio_listener::ListenerAddressPositional,
 /// }
 /// ```
-#[derive(Parser)]
+#[derive(Parser, Debug)]
 pub struct ListenerAddressPositional {
     /// Socket address to listen for incoming connections.  
     ///
@@ -68,7 +68,7 @@ pub struct ListenerAddressPositional {
 ///    listener: tokio_listener::ListenerAddressLFlag,
 /// }
 /// ```
-#[derive(Parser)]
+#[derive(Parser, Debug)]
 pub struct ListenerAddressLFlag {
     /// Socket address to listen for incoming connections.  
     ///
