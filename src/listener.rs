@@ -327,8 +327,6 @@ impl Listener {
     /// * For inetd it accepts only one connection. However, reporting of the error of
     /// inability to accept the second connection is delayed until the first connection finishes, to avoid premature exit from process.
     ///
-    /// With `hyper014` crate feature (default), the listener can be directly used as argument for `Server::builder`.
-    ///
     /// Binding may fail due to unsupported address type, e.g. if trying to use UNIX addresses on Windows or abstract-namespaces sockets on Mac.
     pub async fn bind(
         addr: &ListenerAddress,
