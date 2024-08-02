@@ -51,7 +51,7 @@ pub struct UserOptions {
     #[cfg(feature = "sd_listen")]
     #[cfg_attr(docsrs_alt, doc(cfg(feature = "sd_listen")))]
     /// ignore environment variables like LISTEN_PID or LISTEN_FDS and unconditionally use
-    /// file descritor `3` as a socket in sd-listen or sd-listen-unix modes
+    /// file descritor `3` as a socket in sd-listen mode
     #[cfg_attr(feature = "clap", clap(long))]
     #[cfg_attr(feature = "serde", serde(default))]
     #[cfg_attr(all(feature = "clap", not(unix)), clap(hide = true))]
