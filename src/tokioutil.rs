@@ -24,6 +24,10 @@ impl tokio_util::net::Listener for crate::Listener {
             }) => Ok(SomeSocketAddr::Unix(s.local_addr()?)),
             #[cfg(feature = "inetd")]
             crate::listener::ListenerImpl::Stdio(_) => Ok(SomeSocketAddr::Stdio),
+            #[cfg(all(feature = "vsock", target_os = "linux"))]
+            crate::listener::ListenerImpl::Vsock(crate::listener::ListenerImplVsock{s}) => {
+                Ok(SomeSocketAddr::Vsock(s.local_addr()?))
+            },
             #[cfg(feature = "multi-listener")]
             crate::listener::ListenerImpl::Multi(_) => Ok(SomeSocketAddr::Multiple),
         }

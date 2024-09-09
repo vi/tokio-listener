@@ -31,6 +31,10 @@ impl Connected for Connection {
         if self.try_borrow_stdio().is_some() {
             return ListenerConnectInfo::Stdio;
         }
+        #[cfg(feature = "vsock")]
+        if let Some(vsock) = self.try_borrow_vsock() {
+            return ListenerConnectInfo::Vsock(vsock.connect_info())
+        }
 
         ListenerConnectInfo::Other
     }

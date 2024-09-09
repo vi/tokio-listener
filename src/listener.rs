@@ -49,6 +49,8 @@ impl std::fmt::Debug for Listener {
             ListenerImpl::Unix { .. } => f.write_str("tokio_listener::Listener(unix)"),
             #[cfg(feature = "inetd")]
             ListenerImpl::Stdio(_) => f.write_str("tokio_listener::Listener(stdio)"),
+            #[cfg(all(feature = "vsock", target_os = "linux"))]
+            ListenerImpl::Vsock(_) => f.write_str("tokio_listener::Listener(vsock)"),
             #[cfg(feature = "multi-listener")]
             ListenerImpl::Multi(ref x) => {
                 write!(f, "tokio_listener::Listener(multi, n={})", x.v.len())
@@ -164,6 +166,13 @@ fn listen_abstract(a: &String, usr_opts: &UserOptions) -> Result<ListenerImpl, s
         #[cfg(feature = "socket_options")]
         send_buffer_size: usr_opts.send_buffer_size,
     }))
+}
+
+#[cfg(all(target_os = "linux", feature = "vsock"))]
+fn listen_vsock(vs: &tokio_vsock::VsockAddr) -> Result<ListenerImpl, std::io::Error> {
+    use tokio_vsock::VsockListener;
+    let listener = VsockListener::bind(vs.to_owned())?;
+    Ok(ListenerImpl::Vsock(ListenerImplVsock{ s: listener}))
 }
 
 #[cfg(all(feature = "sd_listen", unix))]
@@ -353,6 +362,8 @@ impl Listener {
             ListenerAddress::FromFdNamed(fdname) => {
                 listen_from_fd_named(usr_opts, fdname, sys_opts)?
             }
+            #[cfg(all(target_os = "linux", feature = "vsock"))]
+            ListenerAddress::Vsock(vs) => listen_vsock(vs)?,
             #[allow(unreachable_patterns)]
             _ => {
                 #[allow(unused_imports)]
@@ -410,7 +421,23 @@ impl Listener {
                                 feature: "UNIX-like platform",
                             }
                         }
-                    }
+                    },
+                    ListenerAddress::Vsock(_) => {
+                        #[cfg(target_os = "linux")]
+                        {
+                            MissingCompileTimeFeature {
+                                reason: "use vsock socket",
+                                feature: "vsock",
+                            }
+                        }
+                        #[cfg(not(target_os = "linux"))]
+                        {
+                            MissingPlatformSypport {
+                                reason: "use vsock socket",
+                                feature: "linux platform",
+                            }
+                        }
+                    },
                 };
                 return err.ioerr();
             }
@@ -634,6 +661,11 @@ pub(crate) struct ListenerImplUnix {
     send_buffer_size: Option<usize>,
 }
 
+#[cfg(all(feature = "vsock", target_os = "linux"))]
+pub(crate) struct ListenerImplVsock {
+    pub(crate) s: tokio_vsock::VsockListener,
+}
+
 #[cfg(feature = "multi-listener")]
 pub(crate) struct ListenerImplMulti {
     pub(crate) v: Vec<ListenerImpl>,
@@ -645,6 +677,8 @@ pub(crate) enum ListenerImpl {
     Unix(ListenerImplUnix),
     #[cfg(feature = "inetd")]
     Stdio(StdioListener),
+    #[cfg(all(feature = "vsock", target_os = "linux"))]
+    Vsock(ListenerImplVsock),
     #[cfg(feature = "multi-listener")]
     Multi(ListenerImplMulti),
 }
@@ -660,6 +694,8 @@ impl ListenerImpl {
             ListenerImpl::Unix(ui) => ui.poll_accept(cx),
             #[cfg(feature = "inetd")]
             ListenerImpl::Stdio(x) => x.poll_accept(cx),
+            #[cfg(all(feature = "vsock", target_os = "linux"))]
+            ListenerImpl::Vsock(vs) => vs.poll_accept(cx),
             #[cfg(feature = "multi-listener")]
             ListenerImpl::Multi(x) => x.poll_accept(cx),
         }
@@ -731,6 +767,26 @@ impl ListenerImplUnix {
                     SomeSocketAddr::Unix(a),
                 )))
             }
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+#[cfg(all(feature = "vsock", target_os = "linux"))]
+impl ListenerImplVsock {
+    fn poll_accept(
+        &mut self,
+        cx: &mut Context<'_>,
+    ) -> Poll<std::io::Result<(Connection, SomeSocketAddr)>> {
+        match self.s.poll_accept(cx) {
+            Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
+            Poll::Ready(Ok((c, a))) => {
+                debug!(r#type = "vsock", "incoming connection");
+                Poll::Ready(Ok((
+                    Connection(ConnectionImpl::Vsock(c)),
+                    SomeSocketAddr::Vsock(a),
+                )))
+            },
             Poll::Pending => Poll::Pending,
         }
     }

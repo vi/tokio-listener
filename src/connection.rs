@@ -22,6 +22,9 @@ use tracing::{debug, warn};
 #[cfg(unix)]
 use tokio::net::UnixStream;
 
+#[cfg(all(feature = "vsock", target_os = "linux"))]
+use tokio_vsock::VsockStream;
+
 /// Accepted connection, which can be a TCP socket, AF_UNIX stream socket or a stdin/stdout pair.
 ///
 /// Although inner enum is private, you can use methods or `From` impls to convert this to/from usual Tokio types.
@@ -34,6 +37,8 @@ impl std::fmt::Debug for Connection {
             ConnectionImpl::Tcp(_) => f.write_str("Connection(tcp)"),
             #[cfg(all(feature = "unix", unix))]
             ConnectionImpl::Unix(_) => f.write_str("Connection(unix)"),
+            #[cfg(all(feature = "vsock", target_os = "linux"))]
+            ConnectionImpl::Vsock(_) => f.write_str("Connection(vsock)"),
             #[cfg(feature = "inetd")]
             ConnectionImpl::Stdio(_, _, _) => f.write_str("Connection(stdio)"),
         }
@@ -52,6 +57,8 @@ pub(crate) enum ConnectionImpl {
         #[pin] tokio::io::Stdout,
         Option<Sender<()>>,
     ),
+    #[cfg(all(feature = "vsock", target_os = "linux"))]
+    Vsock(#[pin] VsockStream),
 }
 
 #[allow(missing_docs)]
@@ -88,6 +95,15 @@ impl Connection {
             Err(self)
         }
     }
+    #[cfg(feature = "vsock")]
+    #[cfg_attr(docsrs_alt, doc(cfg(feature = "vsock")))]
+    pub fn try_into_vsock(self) -> Result<VsockStream, Self> {
+        if let ConnectionImpl::Vsock(vsock) = self.0 {
+            Ok(vsock)
+        } else {
+            Err(self)
+        }
+    }
 
     pub fn try_borrow_tcp(&self) -> Option<&TcpStream> {
         if let ConnectionImpl::Tcp(ref s) = self.0 {
@@ -114,6 +130,15 @@ impl Connection {
             None
         }
     }
+    #[cfg(feature = "vsock")]
+    #[cfg_attr(docsrs_alt, doc(cfg(feature = "vsock")))]
+    pub fn try_borrow_vsock(&self) -> Option<&VsockStream> {
+        if let ConnectionImpl::Vsock(ref vsock) = self.0 {
+            Some(vsock)
+        } else {
+            None
+        }
+    }
 }
 
 impl From<TcpStream> for Connection {
@@ -136,6 +161,14 @@ impl From<(Stdin, Stdout, Option<Sender<()>>)> for Connection {
     }
 }
 
+#[cfg(all(feature = "vsock", target_os = "linux"))]
+#[cfg_attr(docsrs_alt, doc(cfg(all(feature = "vsock", target_os = "linux"))))]
+impl From<VsockStream> for Connection {
+    fn from(s: VsockStream) ->Self {
+        Connection(ConnectionImpl::Vsock(s))
+    }
+}
+
 impl AsyncRead for Connection {
     #[inline]
     fn poll_read(
@@ -150,6 +183,8 @@ impl AsyncRead for Connection {
             ConnectionImplProj::Unix(s) => s.poll_read(cx, buf),
             #[cfg(feature = "inetd")]
             ConnectionImplProj::Stdio(s, _, _) => s.poll_read(cx, buf),
+            #[cfg(all(feature = "vsock", target_os = "linux"))]
+            ConnectionImplProj::Vsock(s) => s.poll_read(cx, buf),
         }
     }
 }
@@ -168,6 +203,8 @@ impl AsyncWrite for Connection {
             ConnectionImplProj::Unix(s) => s.poll_write(cx, buf),
             #[cfg(feature = "inetd")]
             ConnectionImplProj::Stdio(_, s, _) => s.poll_write(cx, buf),
+            #[cfg(all(feature = "vsock", target_os = "linux"))]
+            ConnectionImplProj::Vsock(s) => s.poll_write(cx, buf),
         }
     }
 
@@ -180,6 +217,8 @@ impl AsyncWrite for Connection {
             ConnectionImplProj::Unix(s) => s.poll_flush(cx),
             #[cfg(feature = "inetd")]
             ConnectionImplProj::Stdio(_, s, _) => s.poll_flush(cx),
+            #[cfg(all(feature = "vsock", target_os = "linux"))]
+            ConnectionImplProj::Vsock(s) => s.poll_flush(cx),
         }
     }
 
@@ -207,6 +246,8 @@ impl AsyncWrite for Connection {
                     Poll::Ready(ret)
                 }
             },
+            #[cfg(all(feature = "vsock", target_os = "linux"))]
+            ConnectionImplProj::Vsock(s) => s.poll_shutdown(cx),
         }
     }
 
@@ -223,6 +264,8 @@ impl AsyncWrite for Connection {
             ConnectionImplProj::Unix(s) => s.poll_write_vectored(cx, bufs),
             #[cfg(feature = "inetd")]
             ConnectionImplProj::Stdio(_, s, _) => s.poll_write_vectored(cx, bufs),
+            #[cfg(all(feature = "vsock", target_os = "linux"))]
+            ConnectionImplProj::Vsock(s) => s.poll_write_vectored(cx, bufs),
         }
     }
 
@@ -234,6 +277,8 @@ impl AsyncWrite for Connection {
             ConnectionImpl::Unix(s) => s.is_write_vectored(),
             #[cfg(feature = "inetd")]
             ConnectionImpl::Stdio(_, s, _) => s.is_write_vectored(),
+            #[cfg(all(feature = "vsock", target_os = "linux"))]
+            ConnectionImpl::Vsock(s) => s.is_write_vectored(),
         }
     }
 }
