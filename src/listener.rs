@@ -169,9 +169,10 @@ fn listen_abstract(a: &String, usr_opts: &UserOptions) -> Result<ListenerImpl, s
 }
 
 #[cfg(all(target_os = "linux", feature = "vsock"))]
-fn listen_vsock(vs: &tokio_vsock::VsockAddr) -> Result<ListenerImpl, std::io::Error> {
-    use tokio_vsock::VsockListener;
-    let listener = VsockListener::bind(vs.to_owned())?;
+fn listen_vsock((cid, port): &(u32, u32)) -> Result<ListenerImpl, std::io::Error> {
+    use tokio_vsock::{VsockAddr, VsockListener};
+    let vs = VsockAddr::new(*cid, *port);
+    let listener = VsockListener::bind(vs)?;
     Ok(ListenerImpl::Vsock(ListenerImplVsock{ s: listener}))
 }
 

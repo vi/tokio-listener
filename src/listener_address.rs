@@ -1,8 +1,5 @@
 use std::{fmt::Display, net::SocketAddr, path::PathBuf, str::FromStr};
 
-#[cfg(all(unix, feature = "vsock"))]
-use tokio_vsock::VsockAddr;
-
 /// Abstraction over socket address that instructs in which way and at what address (if any) [`Listener`]
 /// should listen for incoming stream connections.
 ///
@@ -31,7 +28,7 @@ use tokio_vsock::VsockAddr;
     feature = "serde",
     derive(serde_with::DeserializeFromStr, serde_with::SerializeDisplay)
 )]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ListenerAddress {
     /// Usual server TCP socket. Triggered by specifying IPv4 or IPv6 address and port pair.
     /// Example: `127.0.0.1:8080`.
@@ -55,7 +52,8 @@ pub enum ListenerAddress {
     ///
     /// Special name `*` means to bind all passed addresses simultaneously, if `multi-listener` crate feature is enabled.
     FromFdNamed(String),
-    Vsock(VsockAddr),
+    /// Pair of CID and port
+    Vsock((u32, u32)),
 }
 
 pub(crate) const SD_LISTEN_FDS_START: i32 = 3;
@@ -86,6 +84,12 @@ impl FromStr for ListenerAddress {
                 return Err("Invalid tokio-listener sd-listen: name");
             }
             Ok(ListenerAddress::FromFdNamed(x.to_owned()))
+        } else if let Some(vsock) = s.strip_prefix("vsock:") {
+            if let Some((Ok(cid), Ok(port))) = vsock.split_once(":").map(|(cid, port)| (cid.parse(), port.parse()))  {
+                Ok(ListenerAddress::Vsock((cid, port)))
+            } else {
+                Err("Invalid tokio-listener vsock: cid:port pair expected")
+            }
         } else if let Ok(a) = s.parse() {
             Ok(ListenerAddress::Tcp(a))
         } else {
@@ -125,7 +129,9 @@ impl Display for ListenerAddress {
             ListenerAddress::FromFdNamed(name) => {
                 write!(f, "sd-listen:{name}")
             }
-            ListenerAddress::Vsock(a) => a.fmt(f),
+            ListenerAddress::Vsock((cid, port)) => {
+                write!(f, "vsock:{cid}:{port}")
+            }
         }
     }
 }
@@ -155,4 +161,11 @@ pub(crate) fn check_env_for_fd(fdnum: i32) -> Option<()> {
     }
 
     Some(())
+}
+
+#[cfg(all(unix, feature = "vsock"))]
+impl std::convert::From<tokio_vsock::VsockAddr> for ListenerAddress {
+    fn from(vs: tokio_vsock::VsockAddr) -> Self {
+        ListenerAddress::Vsock((vs.cid(), vs.port()))
+    }
 }
