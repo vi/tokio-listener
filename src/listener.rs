@@ -49,7 +49,7 @@ impl std::fmt::Debug for Listener {
             ListenerImpl::Unix { .. } => f.write_str("tokio_listener::Listener(unix)"),
             #[cfg(feature = "inetd")]
             ListenerImpl::Stdio(_) => f.write_str("tokio_listener::Listener(stdio)"),
-            #[cfg(all(feature = "vsock", target_os = "linux"))]
+            #[cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))]
             ListenerImpl::Vsock(_) => f.write_str("tokio_listener::Listener(vsock)"),
             #[cfg(feature = "multi-listener")]
             ListenerImpl::Multi(ref x) => {
@@ -168,7 +168,7 @@ fn listen_abstract(a: &String, usr_opts: &UserOptions) -> Result<ListenerImpl, s
     }))
 }
 
-#[cfg(all(target_os = "linux", feature = "vsock"))]
+#[cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))]
 fn listen_vsock((cid, port): &(u32, u32)) -> Result<ListenerImpl, std::io::Error> {
     use tokio_vsock::{VsockAddr, VsockListener};
     let vs = VsockAddr::new(*cid, *port);
@@ -363,7 +363,7 @@ impl Listener {
             ListenerAddress::FromFdNamed(fdname) => {
                 listen_from_fd_named(usr_opts, fdname, sys_opts)?
             }
-            #[cfg(all(target_os = "linux", feature = "vsock"))]
+            #[cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))]
             ListenerAddress::Vsock(vs) => listen_vsock(vs)?,
             #[allow(unreachable_patterns)]
             _ => {
@@ -424,16 +424,16 @@ impl Listener {
                         }
                     },
                     ListenerAddress::Vsock(_) => {
-                        #[cfg(target_os = "linux")]
+                        #[cfg(any(target_os = "linux", target_os = "android", target_os = "macos"))]
                         {
                             MissingCompileTimeFeature {
                                 reason: "use vsock socket",
                                 feature: "vsock",
                             }
                         }
-                        #[cfg(not(target_os = "linux"))]
+                        #[cfg(not(any(target_os = "linux", target_os = "android", target_os = "macos")))]
                         {
-                            MissingPlatformSypport {
+                            MissingPlatformSupport {
                                 reason: "use vsock socket",
                                 feature: "linux platform",
                             }
@@ -662,7 +662,7 @@ pub(crate) struct ListenerImplUnix {
     send_buffer_size: Option<usize>,
 }
 
-#[cfg(all(feature = "vsock", target_os = "linux"))]
+#[cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))]
 pub(crate) struct ListenerImplVsock {
     pub(crate) s: tokio_vsock::VsockListener,
 }
@@ -678,7 +678,7 @@ pub(crate) enum ListenerImpl {
     Unix(ListenerImplUnix),
     #[cfg(feature = "inetd")]
     Stdio(StdioListener),
-    #[cfg(all(feature = "vsock", target_os = "linux"))]
+    #[cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))]
     Vsock(ListenerImplVsock),
     #[cfg(feature = "multi-listener")]
     Multi(ListenerImplMulti),
@@ -695,7 +695,7 @@ impl ListenerImpl {
             ListenerImpl::Unix(ui) => ui.poll_accept(cx),
             #[cfg(feature = "inetd")]
             ListenerImpl::Stdio(x) => x.poll_accept(cx),
-            #[cfg(all(feature = "vsock", target_os = "linux"))]
+            #[cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))]
             ListenerImpl::Vsock(vs) => vs.poll_accept(cx),
             #[cfg(feature = "multi-listener")]
             ListenerImpl::Multi(x) => x.poll_accept(cx),
@@ -773,7 +773,7 @@ impl ListenerImplUnix {
     }
 }
 
-#[cfg(all(feature = "vsock", target_os = "linux"))]
+#[cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))]
 impl ListenerImplVsock {
     fn poll_accept(
         &mut self,

@@ -163,7 +163,7 @@ pub(crate) fn check_env_for_fd(fdnum: i32) -> Option<()> {
     Some(())
 }
 
-#[cfg(all(unix, feature = "vsock"))]
+#[cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))]
 impl std::convert::From<tokio_vsock::VsockAddr> for ListenerAddress {
     fn from(vs: tokio_vsock::VsockAddr) -> Self {
         ListenerAddress::Vsock((vs.cid(), vs.port()))

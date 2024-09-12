@@ -14,8 +14,8 @@ pub enum SomeSocketAddr {
     #[cfg(feature = "inetd")]
     #[cfg_attr(docsrs_alt, doc(cfg(feature = "inetd")))]
     Stdio,
-    #[cfg(all(feature = "vsock", target_os = "linux"))]
-    #[cfg_attr(docsrs_alt, doc(cfg(all(feature = "vsock", target_os = "linux"))))]
+    #[cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))]
+    #[cfg_attr(docsrs_alt, doc(cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))))]
     Vsock(tokio_vsock::VsockAddr),
     #[cfg(feature = "multi-listener")]
     #[cfg_attr(docsrs_alt, doc(cfg(feature = "multi-listener")))]
@@ -30,7 +30,7 @@ impl Display for SomeSocketAddr {
             SomeSocketAddr::Unix(_x) => "unix".fmt(f),
             #[cfg(feature = "inetd")]
             SomeSocketAddr::Stdio => "stdio".fmt(f),
-            #[cfg(all(feature = "vsock", target_os = "linux"))]
+            #[cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))]
             SomeSocketAddr::Vsock(x) => x.fmt(f),
             #[cfg(feature = "multi-listener")]
             SomeSocketAddr::Multiple => "multiple".fmt(f),
@@ -49,7 +49,7 @@ impl SomeSocketAddr {
             SomeSocketAddr::Unix(x) => SomeSocketAddrClonable::Unix(Arc::new(x)),
             #[cfg(feature = "inetd")]
             SomeSocketAddr::Stdio => SomeSocketAddrClonable::Stdio,
-            #[cfg(all(feature = "vsock", target_os = "linux"))]
+            #[cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))]
             SomeSocketAddr::Vsock(x) => SomeSocketAddrClonable::Vsock(x),
             #[cfg(feature = "multi-listener")]
             SomeSocketAddr::Multiple => SomeSocketAddrClonable::Multiple,
@@ -69,8 +69,8 @@ pub enum SomeSocketAddrClonable {
     #[cfg(feature = "inetd")]
     #[cfg_attr(docsrs_alt, doc(cfg(feature = "inetd")))]
     Stdio,
-    #[cfg(all(feature = "vsock", target_os = "linux"))]
-    #[cfg_attr(docsrs_alt, doc(cfg(all(feature = "vsock", target_os = "linux"))))]
+    #[cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))]
+    #[cfg_attr(docsrs_alt, doc(cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))))]
     Vsock(tokio_vsock::VsockAddr),
     #[cfg(feature = "multi-listener")]
     #[cfg_attr(docsrs_alt, doc(cfg(feature = "multi-listener")))]
@@ -85,7 +85,7 @@ impl Display for SomeSocketAddrClonable {
             SomeSocketAddrClonable::Unix(x) => write!(f, "unix:{x:?}"),
             #[cfg(feature = "inetd")]
             SomeSocketAddrClonable::Stdio => "stdio".fmt(f),
-            #[cfg(all(feature = "vsock", target_os = "linux"))]
+            #[cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))]
             SomeSocketAddrClonable::Vsock(x) => x.fmt(f),
             #[cfg(feature = "multi-listener")]
             SomeSocketAddrClonable::Multiple => "multiple".fmt(f),
