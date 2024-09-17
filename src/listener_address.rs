@@ -17,6 +17,7 @@ use std::{fmt::Display, net::SocketAddr, path::PathBuf, str::FromStr};
 /// let addr : ListenerAddress = "[::]:80".parse().unwrap();
 /// let addr : ListenerAddress = "/path/to/socket".parse().unwrap();
 /// let addr : ListenerAddress = "@abstract_linux_address".parse().unwrap();
+/// let addr : ListenerAddress = "vsock:42:8080".parse().unwrap();
 /// let addr : ListenerAddress = "inetd".parse().unwrap();
 /// let addr : ListenerAddress = "sd-listen".parse().unwrap();
 /// let addr : ListenerAddress = "SD_LISTEN".parse().unwrap();
@@ -52,8 +53,18 @@ pub enum ListenerAddress {
     ///
     /// Special name `*` means to bind all passed addresses simultaneously, if `multi-listener` crate feature is enabled.
     FromFdNamed(String),
-    /// Pair of CID and port
-    Vsock((u32, u32)),
+    /// The VSOCK address family facilitates communication between virtual machines and the host they are running on.
+    ///
+    /// [vsock manual]: https://www.man7.org/linux/man-pages/man7/vsock.7.html
+    /// (Implemented only on Linux, Android and Darwin)
+    Vsock {
+        /// A 32-bit Context Identifier (CID)
+        /// The CID identifies the source or destination, which is either a virtual machine or the host.
+        cid: u32,
+
+        /// A 32-bit port number
+        port: u32,
+    },
 }
 
 pub(crate) const SD_LISTEN_FDS_START: i32 = 3;
@@ -85,8 +96,17 @@ impl FromStr for ListenerAddress {
             }
             Ok(ListenerAddress::FromFdNamed(x.to_owned()))
         } else if let Some(vsock) = s.strip_prefix("vsock:") {
-            if let Some((Ok(cid), Ok(port))) = vsock.split_once(":").map(|(cid, port)| (cid.parse(), port.parse()))  {
-                Ok(ListenerAddress::Vsock((cid, port)))
+            if let Some((cid, port)) = vsock.split_once(":") {
+                let port = port.parse().map_err(|_| "unable to parse vsock PORT")?;
+                // We use hardcoded constant, because they are cfg-ed as linux/darwin only,
+                // but we need this code works uniformed on all platforms including windows
+                let cid = match cid.to_ascii_lowercase().as_str() {
+                    "host" => 2, // libc::VMADDR_CID_HOST
+                    "local" => 1, // libc::VMADDR_CID_LOCAL
+                    "any" => u32::MAX, // libc::VMADDR_CID_ANY
+                    other => other.parse().map_err(|_| "unable to parse vsock CID")?
+                };
+                Ok(ListenerAddress::Vsock{ cid, port })
             } else {
                 Err("Invalid tokio-listener vsock: cid:port pair expected")
             }
@@ -129,7 +149,7 @@ impl Display for ListenerAddress {
             ListenerAddress::FromFdNamed(name) => {
                 write!(f, "sd-listen:{name}")
             }
-            ListenerAddress::Vsock((cid, port)) => {
+            ListenerAddress::Vsock{ cid, port } => {
                 write!(f, "vsock:{cid}:{port}")
             }
         }
@@ -166,6 +186,6 @@ pub(crate) fn check_env_for_fd(fdnum: i32) -> Option<()> {
 #[cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))]
 impl std::convert::From<tokio_vsock::VsockAddr> for ListenerAddress {
     fn from(vs: tokio_vsock::VsockAddr) -> Self {
-        ListenerAddress::Vsock((vs.cid(), vs.port()))
+        ListenerAddress::Vsock{ cid: vs.cid(), port: vs.port() }
     }
 }

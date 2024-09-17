@@ -169,9 +169,9 @@ fn listen_abstract(a: &String, usr_opts: &UserOptions) -> Result<ListenerImpl, s
 }
 
 #[cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))]
-fn listen_vsock((cid, port): &(u32, u32)) -> Result<ListenerImpl, std::io::Error> {
+fn listen_vsock(cid: u32, port: u32) -> Result<ListenerImpl, std::io::Error> {
     use tokio_vsock::{VsockAddr, VsockListener};
-    let vs = VsockAddr::new(*cid, *port);
+    let vs = VsockAddr::new(cid, port);
     let listener = VsockListener::bind(vs)?;
     Ok(ListenerImpl::Vsock(ListenerImplVsock{ s: listener}))
 }
@@ -364,7 +364,7 @@ impl Listener {
                 listen_from_fd_named(usr_opts, fdname, sys_opts)?
             }
             #[cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))]
-            ListenerAddress::Vsock(vs) => listen_vsock(vs)?,
+            ListenerAddress::Vsock{ cid, port } => listen_vsock(*cid, *port)?,
             #[allow(unreachable_patterns)]
             _ => {
                 #[allow(unused_imports)]
@@ -423,7 +423,7 @@ impl Listener {
                             }
                         }
                     },
-                    ListenerAddress::Vsock(_) => {
+                    ListenerAddress::Vsock{..} => {
                         #[cfg(any(target_os = "linux", target_os = "android", target_os = "macos"))]
                         {
                             MissingCompileTimeFeature {
