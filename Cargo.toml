@@ -79,7 +79,7 @@ tonic010 = ["dep:tonic_010"]
 tonic011 = ["dep:tonic_011"]
 
 ## Enable `tonic(v0.12)::transport::server::Connected` implementation for [`Connection`]
-tonic012 = ["dep:tonic_012", "tokio-vsock?/tonic-conn"]
+tonic012 = ["dep:tonic_012"]
 
 ## Enable [`tokio_util::net::Listener`] implementation for [`Listener`].
 tokio-util = ["dep:tokio-util"]

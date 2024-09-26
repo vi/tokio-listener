@@ -3,9 +3,6 @@ use tonic_012::transport::server::{Connected, TcpConnectInfo};
 #[cfg(all(feature = "unix", unix))]
 use tonic_012::transport::server::UdsConnectInfo;
 
-#[cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))]
-use tokio_vsock::{VsockStream, VsockConnectInfo};
-
 use crate::Connection;
 
 #[derive(Clone)]
@@ -18,7 +15,7 @@ pub enum ListenerConnectInfo {
     #[cfg_attr(docsrs_alt, doc(cfg(feature = "inetd")))]
     Stdio,
     #[cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))]
-    Vsock(VsockConnectInfo),
+    Vsock(vsock_support::VsockConnectInfo),
     Other,
 }
 
@@ -35,7 +32,7 @@ impl Connected for Connection {
         }
         #[cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))]
         if let Some(vsock_stream) = self.try_borrow_vsock() {
-            return ListenerConnectInfo::Vsock(vsock_stream.connect_info());
+            return ListenerConnectInfo::Vsock(vsock_support::VsockConnectInfo::new(vsock_stream));
         }
         #[cfg(feature = "inetd")]
         if self.try_borrow_stdio().is_some() {
@@ -43,5 +40,32 @@ impl Connected for Connection {
         }
 
         ListenerConnectInfo::Other
+    }
+}
+
+#[cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))]
+mod vsock_support {
+    use tokio_vsock::{VsockAddr, VsockStream};
+
+    /// Connection info for a Vsock Stream.
+    ///
+    /// See [`Connected`] for more details.
+    ///
+    #[derive(Debug, Clone, Eq, PartialEq)]
+    pub struct VsockConnectInfo {
+        peer_addr: Option<VsockAddr>,
+    }
+
+    impl VsockConnectInfo {
+        /// Return the remote address the IO resource is connected too.
+        pub fn peer_addr(&self) -> Option<VsockAddr> {
+            self.peer_addr
+        }
+
+        pub(crate) fn new(vs: &VsockStream) -> Self {
+            Self {
+                peer_addr: vs.peer_addr().ok(),
+            }
+        }
     }
 }
