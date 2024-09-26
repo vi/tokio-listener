@@ -39,6 +39,8 @@ tokio-util = {version = "0.7", optional=true, features=["net","codec"]}
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.26.2", default-features = false, features = ["user", "fs"], optional=true }
 
+[target."cfg(any(target_os = \"linux\", target_os = \"android\", target_os = \"macos\"))".dependencies]
+tokio-vsock = {version = "0.5", optional=true}
 
 [features]
 default = ["user_facing_default", "tokio-util"]
@@ -84,6 +86,9 @@ tokio-util = ["dep:tokio-util"]
 
 ## Enable [`Listener::bind_multiple`] and `sd-listen:*` (if combined with `sd_listen` feature)
 multi-listener = ["dep:futures-util"]
+
+## Enable `Vsock` support
+vsock = ["dep:tokio-vsock"]
 
 [dev-dependencies]
 anyhow = "1.0.71"
