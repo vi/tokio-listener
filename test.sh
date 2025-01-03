@@ -21,5 +21,5 @@ sleep 0.2
 curl http://127.0.0.1:8080/
 curl http://127.0.0.1:8081/
 curl http://127.0.0.1:8082/
-curl --unix ./path_socket http://127.0.0.1:8080/
-curl --abstract-unix abstract_socket http://127.0.0.1:8080/
+curl --unix-socket ./path_socket http://127.0.0.1:8080/
+curl --abstract-unix-socket abstract_socket http://127.0.0.1:8080/
