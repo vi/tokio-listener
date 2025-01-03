@@ -34,7 +34,7 @@ pub struct UserOptions {
 
     #[cfg(feature = "unix_path_tools")]
     #[cfg_attr(docsrs_alt, doc(cfg(feature = "unix_path_tools")))]
-    /// change owner user of the newly bound UNIX socket to this numeric uid
+    /// change owner user of the newly bound UNIX socket to this numeric uid (only privileged user can do)
     #[cfg_attr(feature = "clap", clap(long))]
     #[cfg_attr(feature = "serde", serde(default))]
     #[cfg_attr(all(feature = "clap", not(unix)), clap(hide = true))]
@@ -42,7 +42,7 @@ pub struct UserOptions {
 
     #[cfg(feature = "unix_path_tools")]
     #[cfg_attr(docsrs_alt, doc(cfg(feature = "unix_path_tools")))]
-    /// change owner group of the newly bound UNIX socket to this numeric uid
+    /// change owner group of the newly bound UNIX socket to this numeric uid (only privileged user can do)
     #[cfg_attr(feature = "clap", clap(long))]
     #[cfg_attr(feature = "serde", serde(default))]
     #[cfg_attr(all(feature = "clap", not(unix)), clap(hide = true))]
