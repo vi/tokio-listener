@@ -112,6 +112,8 @@ async fn listen_tcp(
 #[cfg(all(unix, feature = "unix"))]
 #[allow(clippy::similar_names)]
 fn listen_path(usr_opts: &UserOptions, p: &PathBuf) -> Result<ListenerImpl, std::io::Error> {
+    use std::{fs::File, os::unix::fs::MetadataExt};
+
     #[cfg(feature = "unix_path_tools")]
     #[allow(clippy::collapsible_if)]
     if usr_opts.unix_listen_unlink {
@@ -131,12 +133,19 @@ fn listen_path(usr_opts: &UserOptions, p: &PathBuf) -> Result<ListenerImpl, std:
         use crate::UnixChmodVariant;
         use std::os::unix::fs::PermissionsExt;
         if let Some(chmod) = usr_opts.unix_listen_chmod {
-            let mode = match chmod {
-                UnixChmodVariant::Owner => 0o006,
-                UnixChmodVariant::Group => 0o066,
+            // This option is to add permissions, so we need to retrieve the existing mode,
+            // doing bitwise OR to it to produce new mode.
+            let existing_mode = File::open(p)?.metadata()?.mode();
+            let added_mode = match chmod {
+                // u+rw
+                UnixChmodVariant::Owner => 0o600,
+                // ug+rw
+                UnixChmodVariant::Group => 0o660,
+                // a+rw
                 UnixChmodVariant::Everybody => 0o666,
             };
-            let perms = std::fs::Permissions::from_mode(mode);
+            let new_mode = existing_mode | added_mode;
+            let perms = std::fs::Permissions::from_mode(new_mode);
             std::fs::set_permissions(p, perms)?;
         }
         if (usr_opts.unix_listen_uid, usr_opts.unix_listen_gid) != (None, None) {
