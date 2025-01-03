@@ -452,6 +452,23 @@ impl Listener {
             timeout: None,
         })
     }
+
+    /// Get local socket address of the bound socekt
+    pub fn local_addr(&self) -> std::io::Result<SomeSocketAddr> {
+        match &self.i {
+            ListenerImpl::Tcp(ListenerImplTcp { s, .. }) => {
+                Ok(SomeSocketAddr::Tcp(s.local_addr()?))
+            }
+            #[cfg(all(feature = "unix", unix))]
+            crate::listener::ListenerImpl::Unix(crate::listener::ListenerImplUnix {
+                s, ..
+            }) => Ok(SomeSocketAddr::Unix(s.local_addr()?)),
+            #[cfg(feature = "inetd")]
+            crate::listener::ListenerImpl::Stdio(_) => Ok(SomeSocketAddr::Stdio),
+            #[cfg(feature = "multi-listener")]
+            crate::listener::ListenerImpl::Multi(_) => Ok(SomeSocketAddr::Multiple),
+        }
+    }
 }
 
 #[cfg(feature = "inetd")]

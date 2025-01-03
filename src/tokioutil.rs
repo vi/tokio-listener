@@ -1,4 +1,3 @@
-use crate::listener::{ListenerImpl, ListenerImplTcp};
 use crate::SomeSocketAddr;
 
 impl tokio_util::net::Listener for crate::Listener {
@@ -14,18 +13,6 @@ impl tokio_util::net::Listener for crate::Listener {
     }
 
     fn local_addr(&self) -> std::io::Result<Self::Addr> {
-        match &self.i {
-            ListenerImpl::Tcp(ListenerImplTcp { s, .. }) => {
-                Ok(SomeSocketAddr::Tcp(s.local_addr()?))
-            }
-            #[cfg(all(feature = "unix", unix))]
-            crate::listener::ListenerImpl::Unix(crate::listener::ListenerImplUnix {
-                s, ..
-            }) => Ok(SomeSocketAddr::Unix(s.local_addr()?)),
-            #[cfg(feature = "inetd")]
-            crate::listener::ListenerImpl::Stdio(_) => Ok(SomeSocketAddr::Stdio),
-            #[cfg(feature = "multi-listener")]
-            crate::listener::ListenerImpl::Multi(_) => Ok(SomeSocketAddr::Multiple),
-        }
+        crate::Listener::local_addr(&self)
     }
 }

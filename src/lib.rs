@@ -110,6 +110,11 @@ mod hyper014;
 #[cfg_attr(docsrs_alt, doc(cfg(feature = "axum07")))]
 pub mod axum07;
 
+#[cfg(feature = "axum08")]
+#[cfg_attr(docsrs_alt, doc(cfg(feature = "axum08")))]
+mod axum08;
+
+
 #[cfg(feature = "tonic010")]
 #[cfg_attr(docsrs_alt, doc(cfg(feature = "tonic010")))]
 mod tonic010;

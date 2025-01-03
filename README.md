@@ -26,7 +26,7 @@ While it is a solid default choice, sometimes more flexibility is desired, espec
 
 # Examples
 
-* clap_axum - simplest, most straighforward example. Uses Clap as CLI framework and Axum as web framework. There are two versions of the example: one for Axum 0.6, the other for Axum 0.7.
+* clap_axum - simplest, most straighforward example. Uses Clap as CLI framework and Axum as web framework. There are multiple versions of the example, for various Axum versions.
 * argh_hyper - demonstrages how to use non-clap CLI parser. Also uses `hyper` directly instead of Axum.
 * serde_echo - demonstrates that listening configuration can also be specified using e.g. toml file. Is not a web service, but an echo server.
 
