@@ -1,6 +1,6 @@
 [package]
 name = "tokio-listener"
-version = "0.4.3"
+version = "0.4.4"
 edition = "2021"
 repository = "https://github.com/vi/tokio-listener"
 license = "MIT OR Apache-2.0"
