@@ -20,6 +20,9 @@ pub enum SomeSocketAddr {
     #[cfg(feature = "mpsc_listener")]
     #[cfg_attr(docsrs_alt, doc(cfg(feature = "mpsc_listener")))]
     Mpsc,
+    #[cfg(feature = "custom_socket_address")]
+    #[cfg_attr(docsrs_alt, doc(cfg(feature = "custom_socket_address")))]
+    Custom(Arc<[u8]>),
 }
 
 impl Display for SomeSocketAddr {
@@ -34,6 +37,8 @@ impl Display for SomeSocketAddr {
             SomeSocketAddr::Multiple => "multiple".fmt(f),
             #[cfg(feature = "mpsc_listener")]
             SomeSocketAddr::Mpsc => "mpsc".fmt(f),
+            #[cfg(feature = "custom_socket_address")]
+            SomeSocketAddr::Custom(_) => "custom".fmt(f),
         }
     }
 }
@@ -53,6 +58,8 @@ impl SomeSocketAddr {
             SomeSocketAddr::Multiple => SomeSocketAddrClonable::Multiple,
             #[cfg(feature = "mpsc_listener")]
             SomeSocketAddr::Mpsc => SomeSocketAddrClonable::Mpsc,
+            #[cfg(feature = "custom_socket_address")]
+            SomeSocketAddr::Custom(x) => SomeSocketAddrClonable::Custom(x)
         }
     }
 }
@@ -75,6 +82,9 @@ pub enum SomeSocketAddrClonable {
     #[cfg(feature = "mpsc_listener")]
     #[cfg_attr(docsrs_alt, doc(cfg(feature = "mpsc_listener")))]
     Mpsc,
+    #[cfg(feature = "custom_socket_address")]
+    #[cfg_attr(docsrs_alt, doc(cfg(feature = "custom_socket_address")))]
+    Custom(Arc<[u8]>),
 }
 
 impl Display for SomeSocketAddrClonable {
@@ -89,6 +99,8 @@ impl Display for SomeSocketAddrClonable {
             SomeSocketAddrClonable::Multiple => "multiple".fmt(f),
             #[cfg(feature = "mpsc_listener")]
             SomeSocketAddrClonable::Mpsc => "mpsc".fmt(f),
+            #[cfg(feature = "custom_socket_address")]
+            SomeSocketAddrClonable::Custom(_) => "custom".fmt(f),
         }
     }
 }

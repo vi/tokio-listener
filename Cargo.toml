@@ -101,6 +101,9 @@ boxed_variant = ["tokio/io-util"]
 ## Add ability to use [`tokio::sync::mpsc::Receiver`] as a custom [`Listener`]. Can be useful for tests, together with `boxed_variant`.
 mpsc_listener = ["tokio/sync"]
 
+## Add additional variant to [`SomeSocketAddress`] for storing arbitrary content.
+custom_socket_address = []
+
 [dev-dependencies]
 anyhow = "1.0.71"
 argh = "0.1.10"
