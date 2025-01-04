@@ -22,6 +22,12 @@ use tracing::{debug, warn};
 #[cfg(unix)]
 use tokio::net::UnixStream;
 
+/// Socket-like things supported by tokio_listner.
+/// 
+/// With `extra_connection_variants` crate feature `Box<dyn AsyncReadWrite + Send>` can be used as a [`Connection`] variant.
+pub trait AsyncReadWrite : AsyncRead + AsyncWrite + std::fmt::Debug {}
+impl<T: AsyncRead + AsyncWrite + std::fmt::Debug> AsyncReadWrite for T {}
+
 /// Accepted connection, which can be a TCP socket, AF_UNIX stream socket or a stdin/stdout pair.
 ///
 /// Although inner enum is private, you can use methods or `From` impls to convert this to/from usual Tokio types.
@@ -36,6 +42,12 @@ impl std::fmt::Debug for Connection {
             ConnectionImpl::Unix(_) => f.write_str("Connection(unix)"),
             #[cfg(feature = "inetd")]
             ConnectionImpl::Stdio(_, _, _) => f.write_str("Connection(stdio)"),
+            #[cfg(feature = "extra_connection_variants")]
+            ConnectionImpl::Duplex(_)  => f.write_str("Connection(DuplexStream)"),
+            #[cfg(feature = "extra_connection_variants")]
+            ConnectionImpl::Boxed(ref b)  => f.debug_struct("Connection").field("0", b).finish(),
+            #[cfg(feature = "extra_connection_variants")]
+            ConnectionImpl::Dummy(_) => f.write_str("Connection(Dummy)"),
         }
     }
 }
@@ -52,6 +64,12 @@ pub(crate) enum ConnectionImpl {
         #[pin] tokio::io::Stdout,
         Option<Sender<()>>,
     ),
+    #[cfg(feature = "extra_connection_variants")]
+    Duplex(#[pin] tokio::io::DuplexStream),
+    #[cfg(feature = "extra_connection_variants")]
+    Dummy(#[pin] tokio::io::Empty),
+    #[cfg(feature = "extra_connection_variants")]
+    Boxed(Pin<Box<dyn AsyncReadWrite + Send>>),
 }
 
 #[allow(missing_docs)]
@@ -114,6 +132,54 @@ impl Connection {
             None
         }
     }
+
+    #[cfg(feature = "extra_connection_variants")]
+    #[cfg_attr(docsrs_alt, doc(cfg(feature = "extra_connection_variants")))]
+    pub fn try_into_duplex(self) -> Result<tokio::io::DuplexStream, Self> {
+        if let ConnectionImpl::Duplex(s) = self.0 {
+            Ok(s)
+        } else {
+            Err(self)
+        }
+    }
+    #[cfg(feature = "extra_connection_variants")]
+    #[cfg_attr(docsrs_alt, doc(cfg(feature = "extra_connection_variants")))]
+    pub fn try_borrow_duplex(&self) -> Option<&tokio::io::DuplexStream> {
+        if let ConnectionImpl::Duplex(ref s) = self.0 {
+            Some(s)
+        } else {
+            None
+        }
+    }
+
+    #[cfg(feature = "extra_connection_variants")]
+    #[cfg_attr(docsrs_alt, doc(cfg(feature = "extra_connection_variants")))]
+    pub fn is_dummy(&self) -> bool {
+        if let ConnectionImpl::Dummy(ref _s) = self.0 {
+            true
+        } else {
+            false
+        }
+    }
+
+    #[cfg(feature = "extra_connection_variants")]
+    #[cfg_attr(docsrs_alt, doc(cfg(feature = "extra_connection_variants")))]
+    pub fn try_into_boxed(self) -> Result<Pin<Box<dyn AsyncReadWrite + Send>>, Self> {
+        if let ConnectionImpl::Boxed(s) = self.0 {
+            Ok(s)
+        } else {
+            Err(self)
+        }
+    }
+    #[cfg(feature = "extra_connection_variants")]
+    #[cfg_attr(docsrs_alt, doc(cfg(feature = "extra_connection_variants")))]
+    pub fn try_borrow_boxed(&self) -> Option<&Pin<Box<dyn AsyncReadWrite + Send>>> {
+        if let ConnectionImpl::Boxed(ref s) = self.0 {
+            Some(s)
+        } else {
+            None
+        }
+    }
 }
 
 impl From<TcpStream> for Connection {
@@ -136,6 +202,28 @@ impl From<(Stdin, Stdout, Option<Sender<()>>)> for Connection {
     }
 }
 
+#[cfg(feature = "extra_connection_variants")]
+#[cfg_attr(docsrs_alt, doc(cfg(feature = "extra_connection_variants")))]
+impl From<tokio::io::DuplexStream> for Connection {
+    fn from(s: tokio::io::DuplexStream) -> Self {
+        Connection(ConnectionImpl::Duplex(s))
+    }
+}
+#[cfg(feature = "extra_connection_variants")]
+#[cfg_attr(docsrs_alt, doc(cfg(feature = "extra_connection_variants")))]
+impl From<tokio::io::Empty> for Connection {
+    fn from(s: tokio::io::Empty) -> Self {
+        Connection(ConnectionImpl::Dummy(s))
+    }
+}
+#[cfg(feature = "extra_connection_variants")]
+#[cfg_attr(docsrs_alt, doc(cfg(feature = "extra_connection_variants")))]
+impl From<Pin<Box<dyn AsyncReadWrite + Send>>> for Connection {
+    fn from(s: Pin<Box<dyn AsyncReadWrite + Send>>) -> Self {
+        Connection(ConnectionImpl::Boxed(s))
+    }
+}
+
 impl AsyncRead for Connection {
     #[inline]
     fn poll_read(
@@ -150,6 +238,12 @@ impl AsyncRead for Connection {
             ConnectionImplProj::Unix(s) => s.poll_read(cx, buf),
             #[cfg(feature = "inetd")]
             ConnectionImplProj::Stdio(s, _, _) => s.poll_read(cx, buf),
+            #[cfg(feature = "extra_connection_variants")]
+            ConnectionImplProj::Duplex(s) => s.poll_read(cx, buf),
+            #[cfg(feature = "extra_connection_variants")]
+            ConnectionImplProj::Boxed(s) => s.as_mut().poll_read(cx, buf),
+            #[cfg(feature = "extra_connection_variants")]
+            ConnectionImplProj::Dummy(s) => s.poll_read(cx, buf),
         }
     }
 }
@@ -168,6 +262,12 @@ impl AsyncWrite for Connection {
             ConnectionImplProj::Unix(s) => s.poll_write(cx, buf),
             #[cfg(feature = "inetd")]
             ConnectionImplProj::Stdio(_, s, _) => s.poll_write(cx, buf),
+            #[cfg(feature = "extra_connection_variants")]
+            ConnectionImplProj::Duplex(s) => s.poll_write(cx, buf),
+            #[cfg(feature = "extra_connection_variants")]
+            ConnectionImplProj::Boxed(s) => s.as_mut().poll_write(cx, buf),
+            #[cfg(feature = "extra_connection_variants")]
+            ConnectionImplProj::Dummy(s) => s.poll_write(cx, buf),
         }
     }
 
@@ -180,6 +280,12 @@ impl AsyncWrite for Connection {
             ConnectionImplProj::Unix(s) => s.poll_flush(cx),
             #[cfg(feature = "inetd")]
             ConnectionImplProj::Stdio(_, s, _) => s.poll_flush(cx),
+            #[cfg(feature = "extra_connection_variants")]
+            ConnectionImplProj::Duplex(s) => s.poll_flush(cx),
+            #[cfg(feature = "extra_connection_variants")]
+            ConnectionImplProj::Boxed(s) => s.as_mut().poll_flush(cx),
+            #[cfg(feature = "extra_connection_variants")]
+            ConnectionImplProj::Dummy(s) => s.poll_flush(cx),
         }
     }
 
@@ -207,6 +313,12 @@ impl AsyncWrite for Connection {
                     Poll::Ready(ret)
                 }
             },
+            #[cfg(feature = "extra_connection_variants")]
+            ConnectionImplProj::Duplex(s) => s.poll_shutdown(cx),
+            #[cfg(feature = "extra_connection_variants")]
+            ConnectionImplProj::Boxed(s) => s.as_mut().poll_shutdown(cx),
+            #[cfg(feature = "extra_connection_variants")]
+            ConnectionImplProj::Dummy(s) => s.poll_shutdown(cx),
         }
     }
 
@@ -223,6 +335,12 @@ impl AsyncWrite for Connection {
             ConnectionImplProj::Unix(s) => s.poll_write_vectored(cx, bufs),
             #[cfg(feature = "inetd")]
             ConnectionImplProj::Stdio(_, s, _) => s.poll_write_vectored(cx, bufs),
+            #[cfg(feature = "extra_connection_variants")]
+            ConnectionImplProj::Duplex(s) => s.poll_write_vectored(cx, bufs),
+            #[cfg(feature = "extra_connection_variants")]
+            ConnectionImplProj::Boxed(s) => s.as_mut().poll_write_vectored(cx, bufs),
+            #[cfg(feature = "extra_connection_variants")]
+            ConnectionImplProj::Dummy(s) => s.poll_write_vectored(cx, bufs),
         }
     }
 
@@ -234,6 +352,12 @@ impl AsyncWrite for Connection {
             ConnectionImpl::Unix(s) => s.is_write_vectored(),
             #[cfg(feature = "inetd")]
             ConnectionImpl::Stdio(_, s, _) => s.is_write_vectored(),
+            #[cfg(feature = "extra_connection_variants")]
+            ConnectionImpl::Duplex(s) => s.is_write_vectored(),
+            #[cfg(feature = "extra_connection_variants")]
+            ConnectionImpl::Boxed(s) => s.as_ref().is_write_vectored(),
+            #[cfg(feature = "extra_connection_variants")]
+            ConnectionImpl::Dummy(s) => s.is_write_vectored(),
         }
     }
 }

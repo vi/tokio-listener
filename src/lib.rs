@@ -89,7 +89,7 @@ pub use listener::Listener;
 pub(crate) use listener::is_connection_error;
 
 #[doc(inline)]
-pub use connection::Connection;
+pub use connection::{Connection, AsyncReadWrite};
 
 #[doc(inline)]
 pub use some_socket_addr::{SomeSocketAddr, SomeSocketAddrClonable};

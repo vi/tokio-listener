@@ -89,6 +89,9 @@ tokio-util = ["dep:tokio-util"]
 ## Enable [`Listener::bind_multiple`] and `sd-listen:*` (if combined with `sd_listen` feature)
 multi-listener = ["dep:futures-util"]
 
+## Add [`tokio::io::DuplexStream`], [`tokio::io::Empty`] and `Pin<Box<dyn AsyncRead + AsyncWrite + Send>>` variants to the mix for extra flexibility (cannot be triggered by end user, only by API). In particular it should allow using `tokio_test::io::Mock` as a [`Connection`]
+extra_connection_variants = ["tokio/io-util"]
+
 [dev-dependencies]
 anyhow = "1.0.71"
 argh = "0.1.10"
@@ -118,11 +121,13 @@ required-features = ["clap","axum07"]
 name = "clap_axum07_advanced"
 required-features = ["clap","axum07"]
 
-
 [[example]]
 name = "clap_axum08"
 required-features = ["clap","axum08"]
 
+[[example]]
+name = "custom_connection"
+required-features = ["extra_connection_variants"]
 
 [[example]]
 name = "argh_hyper014"
@@ -135,3 +140,6 @@ required-features = ["tonic012"]
 [package.metadata."docs.rs"]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs_alt"]
+
+ [lints.rust]
+ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(docsrs_alt)'] }
