@@ -58,7 +58,9 @@ pub enum ListenerAddress {
     /// the source or destination, which is either a virtual machine or the host.
     ///
     /// [vsock manual]: https://www.man7.org/linux/man-pages/man7/vsock.7.html
-    /// (Implemented only on Linux and Darwin)
+    /// Implemented only on Linux and Darwin; this feature is not enabled by default.
+    /// 
+    /// Instead of numeric CIDs, some pre-defined strings can be specified: `host`, `local`, `any`.
     Vsock {
         /// VSOCK context identifier 
         cid: u32,

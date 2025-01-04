@@ -13,16 +13,18 @@ While it is a solid default choice, sometimes more flexibility is desired, espec
 * Listening abstract-namespaced UNIX socket on Linux. It is triggered by beginning the address with `@`.
 * Accepting connections from a pre-opened socket inherited from parent process (e.g. systemd). This is triggered by special address `sd-listen`. You can also request a specific named or all sockets.
 * Inetd mode - stdin/stdout can also be used for serving one connection.
+* `AF_VSOCK` mode (not enabled by default)
+* Custom listener returning custom connection types can be injected, e.g. for unit testing or extensibility reasons, if appropiate crate features are activated.
 
 ## Other 
 
-* Portability - tricky features are not compiled on platforms which do not support them
+* Portability - tricky features are not compiled on platforms which do not support them. `--all-features` should work on all platforms.
 * `clap` integration - custom address can be added as a Clap field (due to FromStr impl). Other options can be included by `clap(flatten)`, which also brings short documentation to the CLI help message. Alternatively, the whole set of primary address and additional options can be brought in using `ListenerAddressPositional` or `ListenerAddressLFlag` helper types.
 * `serde` intergration - custom address type behaves like a string with respect to Serde. Other options can also be serialized or deserialized.
 * For UNIX path sockets, it supports unlinking, chowning and chmodding the file per user request.
-* `axum 0.7` integration.
+* Axum integration (multiple versions), Hyper integration (both `0.14` and `hyper-util`).
 * Multi-listener - easy was to bind to multiple ports simulteneously. Combined with systemd support, also allows to trigger multi-listen using special `sd-listen:*` address. Not enabled by default.
-* Fine-grained compile-time feature switches. Without features it should basically reduce to a thin wrapper around plain `TcpListener`.
+* Fine-grained compile-time feature switches. Without default features it should basically reduce to a thin wrapper around plain `TcpListener`.
 
 # Examples
 

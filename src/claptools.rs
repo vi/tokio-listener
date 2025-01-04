@@ -23,7 +23,7 @@ use clap::Parser;
 pub struct ListenerAddressPositional {
     /// Socket address to listen for incoming connections.  
     ///
-    /// Various types of addresses are supported:
+    /// Various types of addresses can be supported:
     ///
     /// * TCP socket address and port, like 127.0.0.1:8080 or [::]:80
     ///
@@ -31,6 +31,7 @@ pub struct ListenerAddressPositional {
     ///
     /// * AF_VSOCK socket in format vsock:cid:port, like vsock:42:8080
     ///   Refer vsock manual for details: https://www.man7.org/linux/man-pages/man7/vsock.7.html
+    ///   This feature is not enabled by default. Instead of a number, CID can be 'host', 'local' or 'any'.
     ///
     /// * Special keyword "inetd" for serving one connection from stdin/stdout
     ///
@@ -75,7 +76,7 @@ pub struct ListenerAddressPositional {
 pub struct ListenerAddressLFlag {
     /// Socket address to listen for incoming connections.  
     ///
-    /// Various types of addresses are supported:
+    /// Various types of addresses can be supported:
     ///
     /// * TCP socket address and port, like 127.0.0.1:8080 or [::]:80
     ///
@@ -83,6 +84,7 @@ pub struct ListenerAddressLFlag {
     ///
     /// * AF_VSOCK socket in format vsock:cid:port, like vsock:42:8080
     ///   Refer vsock manual for details: https://www.man7.org/linux/man-pages/man7/vsock.7.html
+    ///   This feature is not enabled by default. Instead of a number, CID can be 'host', 'local' or 'any'.
     ///
     /// * Special keyword "inetd" for serving one connection from stdin/stdout
     ///
