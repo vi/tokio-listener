@@ -28,6 +28,9 @@ use tokio::net::UnixStream;
 pub trait AsyncReadWrite: AsyncRead + AsyncWrite + std::fmt::Debug {}
 impl<T: AsyncRead + AsyncWrite + std::fmt::Debug> AsyncReadWrite for T {}
 
+#[cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))]
+use tokio_vsock::VsockStream;
+
 /// Accepted connection, which can be a TCP socket, AF_UNIX stream socket or a stdin/stdout pair.
 ///
 /// Although inner enum is private, you can use methods or `From` impls to convert this to/from usual Tokio types.
@@ -40,6 +43,8 @@ impl std::fmt::Debug for Connection {
             ConnectionImpl::Tcp(_) => f.write_str("Connection(tcp)"),
             #[cfg(all(feature = "unix", unix))]
             ConnectionImpl::Unix(_) => f.write_str("Connection(unix)"),
+            #[cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))]
+            ConnectionImpl::Vsock(_) => f.write_str("Connection(vsock)"),
             #[cfg(feature = "inetd")]
             ConnectionImpl::Stdio(_, _, _) => f.write_str("Connection(stdio)"),
             #[cfg(feature = "duplex_variant")]
@@ -70,6 +75,8 @@ pub(crate) enum ConnectionImpl {
     Dummy(#[pin] tokio::io::Empty),
     #[cfg(feature = "boxed_variant")]
     Boxed(Pin<Box<dyn AsyncReadWrite + Send>>),
+    #[cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))]
+    Vsock(#[pin] VsockStream),
 }
 
 #[allow(missing_docs)]
@@ -182,6 +189,25 @@ impl Connection {
             None
         }
     }
+    
+    #[cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))]
+    #[cfg_attr(docsrs_alt, doc(cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))))]
+    pub fn try_into_vsock(self) -> Result<VsockStream, Self> {
+        if let ConnectionImpl::Vsock(vsock) = self.0 {
+            Ok(vsock)
+        } else {
+            Err(self)
+        }
+    }
+    #[cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))]
+    #[cfg_attr(docsrs_alt, doc(cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))))]
+    pub fn try_borrow_vsock(&self) -> Option<&VsockStream> {
+        if let ConnectionImpl::Vsock(ref vsock) = self.0 {
+            Some(vsock)
+        } else {
+            None
+        }
+    }
 }
 
 impl From<TcpStream> for Connection {
@@ -226,6 +252,14 @@ impl From<Pin<Box<dyn AsyncReadWrite + Send>>> for Connection {
     }
 }
 
+#[cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))]
+#[cfg_attr(docsrs_alt, doc(cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))))]
+impl From<VsockStream> for Connection {
+    fn from(s: VsockStream) ->Self {
+        Connection(ConnectionImpl::Vsock(s))
+    }
+}
+
 impl AsyncRead for Connection {
     #[inline]
     fn poll_read(
@@ -246,6 +280,8 @@ impl AsyncRead for Connection {
             ConnectionImplProj::Boxed(s) => s.as_mut().poll_read(cx, buf),
             #[cfg(feature = "dummy_variant")]
             ConnectionImplProj::Dummy(s) => s.poll_read(cx, buf),
+            #[cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))]
+            ConnectionImplProj::Vsock(s) => s.poll_read(cx, buf),
         }
     }
 }
@@ -270,6 +306,8 @@ impl AsyncWrite for Connection {
             ConnectionImplProj::Boxed(s) => s.as_mut().poll_write(cx, buf),
             #[cfg(feature = "dummy_variant")]
             ConnectionImplProj::Dummy(s) => s.poll_write(cx, buf),
+            #[cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))]
+            ConnectionImplProj::Vsock(s) => s.poll_write(cx, buf),
         }
     }
 
@@ -288,6 +326,8 @@ impl AsyncWrite for Connection {
             ConnectionImplProj::Boxed(s) => s.as_mut().poll_flush(cx),
             #[cfg(feature = "dummy_variant")]
             ConnectionImplProj::Dummy(s) => s.poll_flush(cx),
+            #[cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))]
+            ConnectionImplProj::Vsock(s) => s.poll_flush(cx),
         }
     }
 
@@ -321,6 +361,8 @@ impl AsyncWrite for Connection {
             ConnectionImplProj::Boxed(s) => s.as_mut().poll_shutdown(cx),
             #[cfg(feature = "dummy_variant")]
             ConnectionImplProj::Dummy(s) => s.poll_shutdown(cx),
+            #[cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))]
+            ConnectionImplProj::Vsock(s) => s.poll_shutdown(cx),
         }
     }
 
@@ -343,6 +385,8 @@ impl AsyncWrite for Connection {
             ConnectionImplProj::Boxed(s) => s.as_mut().poll_write_vectored(cx, bufs),
             #[cfg(feature = "dummy_variant")]
             ConnectionImplProj::Dummy(s) => s.poll_write_vectored(cx, bufs),
+            #[cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))]
+            ConnectionImplProj::Vsock(s) => s.poll_write_vectored(cx, bufs),
         }
     }
 
@@ -360,6 +404,8 @@ impl AsyncWrite for Connection {
             ConnectionImpl::Boxed(s) => s.as_ref().is_write_vectored(),
             #[cfg(feature = "dummy_variant")]
             ConnectionImpl::Dummy(s) => s.is_write_vectored(),
+            #[cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))]
+            ConnectionImpl::Vsock(s) => s.is_write_vectored(),
         }
     }
 }

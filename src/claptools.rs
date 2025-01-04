@@ -29,6 +29,9 @@ pub struct ListenerAddressPositional {
     ///
     /// * UNIX socket path like /tmp/mysock or Linux abstract address like @abstract
     ///
+    /// * AF_VSOCK socket in format vsock:cid:port, like vsock:42:8080
+    ///   Refer vsock manual for details: https://www.man7.org/linux/man-pages/man7/vsock.7.html
+    ///
     /// * Special keyword "inetd" for serving one connection from stdin/stdout
     ///
     /// * Special keyword "sd-listen" to accept connections from file descriptor 3 (e.g. systemd socket activation).
@@ -77,6 +80,9 @@ pub struct ListenerAddressLFlag {
     /// * TCP socket address and port, like 127.0.0.1:8080 or [::]:80
     ///
     /// * UNIX socket path like /tmp/mysock or Linux abstract address like @abstract
+    ///
+    /// * AF_VSOCK socket in format vsock:cid:port, like vsock:42:8080
+    ///   Refer vsock manual for details: https://www.man7.org/linux/man-pages/man7/vsock.7.html
     ///
     /// * Special keyword "inetd" for serving one connection from stdin/stdout
     ///

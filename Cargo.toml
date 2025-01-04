@@ -40,6 +40,9 @@ tokio-util = {version = "0.7", optional=true, features=["net","codec"]}
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.26.2", default-features = false, features = ["user", "fs"], optional=true }
 
+[target."cfg(any(target_os = \"linux\", target_os = \"android\", target_os = \"macos\"))".dependencies]
+tokio-vsock = {version = "0.5", optional=true}
+
 
 [features]
 default = ["user_facing_default", "tokio-util"]
@@ -80,9 +83,6 @@ tonic010 = ["dep:tonic_010"]
 ## Enable `tonic(v0.11)::transport::server::Connected` implementation for [`Connection`]
 tonic011 = ["dep:tonic_011"]
 
-## Enable `tonic(v0.12)::transport::server::Connected` implementation for [`Connection`]
-tonic012 = ["dep:tonic_012"]
-
 ## Enable [`tokio_util::net::Listener`] implementation for [`Listener`].
 tokio-util = ["dep:tokio-util"]
 
@@ -103,6 +103,9 @@ mpsc_listener = ["tokio/sync"]
 
 ## Add additional variant to [`SomeSocketAddress`] for storing arbitrary content.
 custom_socket_address = []
+
+## Enable `Vsock` support on Linux and Mac
+vsock = ["dep:tokio-vsock"]
 
 [dev-dependencies]
 anyhow = "1.0.71"
