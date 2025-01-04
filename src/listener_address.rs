@@ -60,7 +60,9 @@ pub enum ListenerAddress {
     /// [vsock manual]: https://www.man7.org/linux/man-pages/man7/vsock.7.html
     /// (Implemented only on Linux and Darwin)
     Vsock {
+        /// VSOCK context identifier 
         cid: u32,
+        /// VSOCK port number
         port: u32,
     },
 }

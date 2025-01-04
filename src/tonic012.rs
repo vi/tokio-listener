@@ -4,10 +4,11 @@ use tonic_012::transport::server::{Connected, TcpConnectInfo};
 use tonic_012::transport::server::UdsConnectInfo;
 
 #[cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))]
-use tokio_vsock::{VsockStream, VsockConnectInfo};
+use tokio_vsock::VsockConnectInfo;
 
 use crate::Connection;
 
+#[non_exhaustive]
 #[derive(Clone)]
 pub enum ListenerConnectInfo {
     Tcp(TcpConnectInfo),
@@ -17,7 +18,7 @@ pub enum ListenerConnectInfo {
     #[cfg(feature = "inetd")]
     #[cfg_attr(docsrs_alt, doc(cfg(feature = "inetd")))]
     Stdio,
-    #[cfg(feature = "vsock")]
+    #[cfg(all(any(target_os = "linux", target_os = "android", target_os = "macos"), feature = "vsock"))]
     Vsock(VsockConnectInfo),
     Other,
 }
