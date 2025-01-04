@@ -7,6 +7,7 @@ license = "MIT OR Apache-2.0"
 description = "Add flexibility in a way of accepting connections: unix sockets, socket activation, inetd mode to Tokio-based projects."
 categories = ["network-programming", "command-line-interface"]
 keywords = ["tokio","unix", "systemd", "socket-activation", "clap"]
+include = ["src","examples","Cargo.toml","CHANGELOG.md","README.md"]
 
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
