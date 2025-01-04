@@ -53,6 +53,22 @@ impl std::fmt::Debug for Listener {
             ListenerImpl::Multi(ref x) => {
                 write!(f, "tokio_listener::Listener(multi, n={})", x.v.len())
             }
+            #[cfg(feature = "mpsc_listener")]
+            ListenerImpl::Mpsc(_) => {
+                write!(f, "tokio_listener::Listener(mpsc)")
+            }
+        }
+    }
+}
+
+#[cfg(feature = "mpsc_listener")]
+#[cfg_attr(docsrs_alt, doc(cfg(feature = "mpsc_listener")))]
+impl From<tokio::sync::mpsc::Receiver<(Connection, SomeSocketAddr)>> for Listener {
+    fn from(value: tokio::sync::mpsc::Receiver<(Connection, SomeSocketAddr)>) -> Self {
+        Listener {
+            i: ListenerImpl::Mpsc(value),
+            sleep_on_errors: false,
+            timeout: None,
         }
     }
 }
@@ -470,6 +486,8 @@ impl Listener {
             crate::listener::ListenerImpl::Stdio(_) => Ok(SomeSocketAddr::Stdio),
             #[cfg(feature = "multi-listener")]
             crate::listener::ListenerImpl::Multi(_) => Ok(SomeSocketAddr::Multiple),
+            #[cfg(feature = "mpsc_listener")]
+            crate::listener::ListenerImpl::Mpsc(_) => Ok(SomeSocketAddr::Mpsc),
         }
     }
 }
@@ -667,6 +685,8 @@ pub(crate) enum ListenerImpl {
     Stdio(StdioListener),
     #[cfg(feature = "multi-listener")]
     Multi(ListenerImplMulti),
+    #[cfg(feature = "mpsc_listener")]
+    Mpsc(tokio::sync::mpsc::Receiver<(Connection, SomeSocketAddr)>),
 }
 
 impl ListenerImpl {
@@ -682,7 +702,21 @@ impl ListenerImpl {
             ListenerImpl::Stdio(x) => x.poll_accept(cx),
             #[cfg(feature = "multi-listener")]
             ListenerImpl::Multi(x) => x.poll_accept(cx),
+            #[cfg(feature = "mpsc_listener")]
+            ListenerImpl::Mpsc(x) => mpsc_poll_accept(x, cx),
         }
+    }
+}
+
+#[cfg(feature = "mpsc_listener")]
+fn mpsc_poll_accept(
+    x: &mut tokio::sync::mpsc::Receiver<(Connection, SomeSocketAddr)>,
+    cx: &mut Context<'_>,
+) -> Poll<std::io::Result<(Connection, SomeSocketAddr)>> {
+    match x.poll_recv(cx) {
+        Poll::Ready(Some(x)) => Poll::Ready(Ok(x)),
+        Poll::Ready(None) => Poll::Ready(Err(std::io::ErrorKind::BrokenPipe.into())),
+        Poll::Pending => return Poll::Pending,
     }
 }
 

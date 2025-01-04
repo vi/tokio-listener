@@ -44,7 +44,7 @@ impl std::fmt::Debug for Connection {
             ConnectionImpl::Stdio(_, _, _) => f.write_str("Connection(stdio)"),
             #[cfg(feature = "duplex_variant")]
             ConnectionImpl::Duplex(_)  => f.write_str("Connection(DuplexStream)"),
-            #[cfg(feature = "boxed")]
+            #[cfg(feature = "boxed_variant")]
             ConnectionImpl::Boxed(ref b)  => f.debug_struct("Connection").field("0", b).finish(),
             #[cfg(feature = "dummy_variant")]
             ConnectionImpl::Dummy(_) => f.write_str("Connection(Dummy)"),
@@ -68,7 +68,7 @@ pub(crate) enum ConnectionImpl {
     Duplex(#[pin] tokio::io::DuplexStream),
     #[cfg(feature = "dummy_variant")]
     Dummy(#[pin] tokio::io::Empty),
-    #[cfg(feature = "boxed")]
+    #[cfg(feature = "boxed_variant")]
     Boxed(Pin<Box<dyn AsyncReadWrite + Send>>),
 }
 
@@ -162,8 +162,8 @@ impl Connection {
         }
     }
 
-    #[cfg(feature = "boxed")]
-    #[cfg_attr(docsrs_alt, doc(cfg(feature = "boxed")))]
+    #[cfg(feature = "boxed_variant")]
+    #[cfg_attr(docsrs_alt, doc(cfg(feature = "boxed_variant")))]
     pub fn try_into_boxed(self) -> Result<Pin<Box<dyn AsyncReadWrite + Send>>, Self> {
         if let ConnectionImpl::Boxed(s) = self.0 {
             Ok(s)
@@ -171,8 +171,8 @@ impl Connection {
             Err(self)
         }
     }
-    #[cfg(feature = "boxed")]
-    #[cfg_attr(docsrs_alt, doc(cfg(feature = "boxed")))]
+    #[cfg(feature = "boxed_variant")]
+    #[cfg_attr(docsrs_alt, doc(cfg(feature = "boxed_variant")))]
     pub fn try_borrow_boxed(&self) -> Option<&Pin<Box<dyn AsyncReadWrite + Send>>> {
         if let ConnectionImpl::Boxed(ref s) = self.0 {
             Some(s)
@@ -216,8 +216,8 @@ impl From<tokio::io::Empty> for Connection {
         Connection(ConnectionImpl::Dummy(s))
     }
 }
-#[cfg(feature = "boxed")]
-#[cfg_attr(docsrs_alt, doc(cfg(feature = "boxed")))]
+#[cfg(feature = "boxed_variant")]
+#[cfg_attr(docsrs_alt, doc(cfg(feature = "boxed_variant")))]
 impl From<Pin<Box<dyn AsyncReadWrite + Send>>> for Connection {
     fn from(s: Pin<Box<dyn AsyncReadWrite + Send>>) -> Self {
         Connection(ConnectionImpl::Boxed(s))
@@ -240,7 +240,7 @@ impl AsyncRead for Connection {
             ConnectionImplProj::Stdio(s, _, _) => s.poll_read(cx, buf),
             #[cfg(feature = "duplex_variant")]
             ConnectionImplProj::Duplex(s) => s.poll_read(cx, buf),
-            #[cfg(feature = "boxed")]
+            #[cfg(feature = "boxed_variant")]
             ConnectionImplProj::Boxed(s) => s.as_mut().poll_read(cx, buf),
             #[cfg(feature = "dummy_variant")]
             ConnectionImplProj::Dummy(s) => s.poll_read(cx, buf),
@@ -264,7 +264,7 @@ impl AsyncWrite for Connection {
             ConnectionImplProj::Stdio(_, s, _) => s.poll_write(cx, buf),
             #[cfg(feature = "duplex_variant")]
             ConnectionImplProj::Duplex(s) => s.poll_write(cx, buf),
-            #[cfg(feature = "boxed")]
+            #[cfg(feature = "boxed_variant")]
             ConnectionImplProj::Boxed(s) => s.as_mut().poll_write(cx, buf),
             #[cfg(feature = "dummy_variant")]
             ConnectionImplProj::Dummy(s) => s.poll_write(cx, buf),
@@ -282,7 +282,7 @@ impl AsyncWrite for Connection {
             ConnectionImplProj::Stdio(_, s, _) => s.poll_flush(cx),
             #[cfg(feature = "duplex_variant")]
             ConnectionImplProj::Duplex(s) => s.poll_flush(cx),
-            #[cfg(feature = "boxed")]
+            #[cfg(feature = "boxed_variant")]
             ConnectionImplProj::Boxed(s) => s.as_mut().poll_flush(cx),
             #[cfg(feature = "dummy_variant")]
             ConnectionImplProj::Dummy(s) => s.poll_flush(cx),
@@ -315,7 +315,7 @@ impl AsyncWrite for Connection {
             },
             #[cfg(feature = "duplex_variant")]
             ConnectionImplProj::Duplex(s) => s.poll_shutdown(cx),
-            #[cfg(feature = "boxed")]
+            #[cfg(feature = "boxed_variant")]
             ConnectionImplProj::Boxed(s) => s.as_mut().poll_shutdown(cx),
             #[cfg(feature = "dummy_variant")]
             ConnectionImplProj::Dummy(s) => s.poll_shutdown(cx),
@@ -337,7 +337,7 @@ impl AsyncWrite for Connection {
             ConnectionImplProj::Stdio(_, s, _) => s.poll_write_vectored(cx, bufs),
             #[cfg(feature = "duplex_variant")]
             ConnectionImplProj::Duplex(s) => s.poll_write_vectored(cx, bufs),
-            #[cfg(feature = "boxed")]
+            #[cfg(feature = "boxed_variant")]
             ConnectionImplProj::Boxed(s) => s.as_mut().poll_write_vectored(cx, bufs),
             #[cfg(feature = "dummy_variant")]
             ConnectionImplProj::Dummy(s) => s.poll_write_vectored(cx, bufs),
@@ -354,7 +354,7 @@ impl AsyncWrite for Connection {
             ConnectionImpl::Stdio(_, s, _) => s.is_write_vectored(),
             #[cfg(feature = "duplex_variant")]
             ConnectionImpl::Duplex(s) => s.is_write_vectored(),
-            #[cfg(feature = "boxed")]
+            #[cfg(feature = "boxed_variant")]
             ConnectionImpl::Boxed(s) => s.as_ref().is_write_vectored(),
             #[cfg(feature = "dummy_variant")]
             ConnectionImpl::Dummy(s) => s.is_write_vectored(),

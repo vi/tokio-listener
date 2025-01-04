@@ -17,6 +17,9 @@ pub enum SomeSocketAddr {
     #[cfg(feature = "multi-listener")]
     #[cfg_attr(docsrs_alt, doc(cfg(feature = "multi-listener")))]
     Multiple,
+    #[cfg(feature = "mpsc_listener")]
+    #[cfg_attr(docsrs_alt, doc(cfg(feature = "mpsc_listener")))]
+    Mpsc,
 }
 
 impl Display for SomeSocketAddr {
@@ -29,6 +32,8 @@ impl Display for SomeSocketAddr {
             SomeSocketAddr::Stdio => "stdio".fmt(f),
             #[cfg(feature = "multi-listener")]
             SomeSocketAddr::Multiple => "multiple".fmt(f),
+            #[cfg(feature = "mpsc_listener")]
+            SomeSocketAddr::Mpsc => "mpsc".fmt(f),
         }
     }
 }
@@ -46,6 +51,8 @@ impl SomeSocketAddr {
             SomeSocketAddr::Stdio => SomeSocketAddrClonable::Stdio,
             #[cfg(feature = "multi-listener")]
             SomeSocketAddr::Multiple => SomeSocketAddrClonable::Multiple,
+            #[cfg(feature = "mpsc_listener")]
+            SomeSocketAddr::Mpsc => SomeSocketAddrClonable::Mpsc,
         }
     }
 }
@@ -65,6 +72,9 @@ pub enum SomeSocketAddrClonable {
     #[cfg(feature = "multi-listener")]
     #[cfg_attr(docsrs_alt, doc(cfg(feature = "multi-listener")))]
     Multiple,
+    #[cfg(feature = "mpsc_listener")]
+    #[cfg_attr(docsrs_alt, doc(cfg(feature = "mpsc_listener")))]
+    Mpsc,
 }
 
 impl Display for SomeSocketAddrClonable {
@@ -77,6 +87,8 @@ impl Display for SomeSocketAddrClonable {
             SomeSocketAddrClonable::Stdio => "stdio".fmt(f),
             #[cfg(feature = "multi-listener")]
             SomeSocketAddrClonable::Multiple => "multiple".fmt(f),
+            #[cfg(feature = "mpsc_listener")]
+            SomeSocketAddrClonable::Mpsc => "mpsc".fmt(f),
         }
     }
 }

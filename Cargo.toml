@@ -96,7 +96,10 @@ duplex_variant = ["tokio/io-util"]
 dummy_variant = ["tokio/io-util"]
 
 ## Add `Pin<Box<dyn AsyncRead + AsyncWrite + Send>>`  variant to [`Connection`] for extra flexibility (cannot be triggered by end user, only by API). In particular this allows using `tokio_test::io::Mock` as a [`Connection`]. Also allows constructing customized [`Listener`]s.
-boxed = ["tokio/io-util"]
+boxed_variant = ["tokio/io-util"]
+
+## Add ability to use [`tokio::sync::mpsc::Receiver`] as a custom [`Listener`]. Can be useful for tests, together with `boxed_variant`.
+mpsc_listener = ["tokio/sync"]
 
 [dev-dependencies]
 anyhow = "1.0.71"
@@ -133,7 +136,7 @@ required-features = ["clap","axum08"]
 
 [[example]]
 name = "custom_connection"
-required-features = ["boxed"]
+required-features = ["boxed_variant", "mpsc_listener"]
 
 [[example]]
 name = "argh_hyper014"

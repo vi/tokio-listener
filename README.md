@@ -29,6 +29,7 @@ While it is a solid default choice, sometimes more flexibility is desired, espec
 * clap_axum - simplest, most straighforward example. Uses Clap as CLI framework and Axum as web framework. There are multiple versions of the example, for various Axum versions.
 * argh_hyper - demonstrages how to use non-clap CLI parser. Also uses `hyper` directly instead of Axum.
 * serde_echo - demonstrates that listening configuration can also be specified using e.g. toml file. Is not a web service, but an echo server.
+* custom_connection - demonstrates how to extend tokio_listener with custom connections and use it for mock testing
 
 See [crate docs](https://docs.rs/tokio-listener) for API reference and some other examples.
 
