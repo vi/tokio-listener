@@ -13,7 +13,7 @@ use std::{
 
 use pin_project::pin_project;
 use tokio::{
-    io::{AsyncRead, AsyncWrite, Stdin, Stdout},
+    io::{AsyncRead, AsyncWrite},
     net::TcpStream,
     sync::oneshot::Sender,
 };
@@ -23,9 +23,9 @@ use tracing::{debug, warn};
 use tokio::net::UnixStream;
 
 /// Socket-like thing supported by tokio_listner.
-/// 
+///
 /// With `boxed` crate feature `Pin<Box<dyn AsyncReadWrite + Send>>` can be used as a [`Connection`] variant.
-pub trait AsyncReadWrite : AsyncRead + AsyncWrite + std::fmt::Debug {}
+pub trait AsyncReadWrite: AsyncRead + AsyncWrite + std::fmt::Debug {}
 impl<T: AsyncRead + AsyncWrite + std::fmt::Debug> AsyncReadWrite for T {}
 
 /// Accepted connection, which can be a TCP socket, AF_UNIX stream socket or a stdin/stdout pair.
@@ -43,9 +43,9 @@ impl std::fmt::Debug for Connection {
             #[cfg(feature = "inetd")]
             ConnectionImpl::Stdio(_, _, _) => f.write_str("Connection(stdio)"),
             #[cfg(feature = "duplex_variant")]
-            ConnectionImpl::Duplex(_)  => f.write_str("Connection(DuplexStream)"),
+            ConnectionImpl::Duplex(_) => f.write_str("Connection(DuplexStream)"),
             #[cfg(feature = "boxed_variant")]
-            ConnectionImpl::Boxed(ref b)  => f.debug_struct("Connection").field("0", b).finish(),
+            ConnectionImpl::Boxed(ref b) => f.debug_struct("Connection").field("0", b).finish(),
             #[cfg(feature = "dummy_variant")]
             ConnectionImpl::Dummy(_) => f.write_str("Connection(Dummy)"),
         }
@@ -99,7 +99,9 @@ impl Connection {
     /// allowing proper timing of listening termination - without trying to wait for second client in inetd mode,
     /// but also without exiting prematurely, while the client is still being served, as exiting the listening loop may
     /// cause the whole process to finish.
-    pub fn try_into_stdio(self) -> Result<(Stdin, Stdout, Option<Sender<()>>), Self> {
+    pub fn try_into_stdio(
+        self,
+    ) -> Result<(tokio::io::Stdin, tokio::io::Stdout, Option<Sender<()>>), Self> {
         if let ConnectionImpl::Stdio(i, o, f) = self.0 {
             Ok((i, o, f))
         } else {
@@ -125,7 +127,7 @@ impl Connection {
     }
     #[cfg(feature = "inetd")]
     #[cfg_attr(docsrs_alt, doc(cfg(feature = "inetd")))]
-    pub fn try_borrow_stdio(&self) -> Option<(&Stdin, &Stdout)> {
+    pub fn try_borrow_stdio(&self) -> Option<(&tokio::io::Stdin, &tokio::io::Stdout)> {
         if let ConnectionImpl::Stdio(ref i, ref o, ..) = self.0 {
             Some((i, o))
         } else {
@@ -196,8 +198,8 @@ impl From<UnixStream> for Connection {
 }
 #[cfg(feature = "inetd")]
 #[cfg_attr(docsrs_alt, doc(cfg(feature = "inetd")))]
-impl From<(Stdin, Stdout, Option<Sender<()>>)> for Connection {
-    fn from(s: (Stdin, Stdout, Option<Sender<()>>)) -> Self {
+impl From<(tokio::io::Stdin, tokio::io::Stdout, Option<Sender<()>>)> for Connection {
+    fn from(s: (tokio::io::Stdin, tokio::io::Stdout, Option<Sender<()>>)) -> Self {
         Connection(ConnectionImpl::Stdio(s.0, s.1, s.2))
     }
 }

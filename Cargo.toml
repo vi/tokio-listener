@@ -27,7 +27,7 @@ pin-project = "1.1.2"
 serde = { version = "1.0.171", features = ["derive"] , optional = true}
 serde_with = { version = "3.0.0", optional = true}
 socket2 = {version="0.5.3", optional=true, features=["all"]}
-tokio = { version = "1.29.1", features = ["net", "io-std", "time", "sync"] }
+tokio = { version = "1.29.1", features = ["net", "time", "sync"] }
 tonic_012 = { package = "tonic", version = "0.12.0", optional = true }
 tonic_011 = { package = "tonic", version = "0.11.0", optional = true }
 tonic_010 = { package = "tonic", version = "0.10.2", optional = true }
@@ -60,7 +60,7 @@ axum07 = ["dep:hyper1", "dep:hyper-util", "dep:futures-util", "dep:tower-service
 axum08 = ["dep:axum08"]
 
 ## Enable inetd (stdin/stdout) mode
-inetd = ["dep:futures-util"]
+inetd = ["dep:futures-util", "tokio/io-std"]
 
 ## Enable UNIX socket mode
 unix = []
