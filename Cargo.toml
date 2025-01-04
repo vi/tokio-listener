@@ -115,6 +115,8 @@ anyhow = "1.0.71"
 argh = "0.1.10"
 axum06 = { version="0.6.18", package="axum" }
 clap = { version = "4.3.11", features = ["help"] }
+futures = "0.3.31"
+futures-util = "0.3"
 hyper014 = { version = "0.14.27", features = ["server", "http1"], package="hyper" }
 tokio = { version = "1.29.1", features = ["macros", "rt", "io-util"] }
 tokio-test = "0.4.2"
