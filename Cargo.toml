@@ -28,6 +28,7 @@ serde = { version = "1.0.171", features = ["derive"] , optional = true}
 serde_with = { version = "3.0.0", optional = true}
 socket2 = {version="0.5.3", optional=true, features=["all"]}
 tokio = { version = "1.29.1", features = ["net", "time", "sync"] }
+tonic_013 = { package = "tonic", version = "0.13.0", optional = true }
 tonic_012 = { package = "tonic", version = "0.12.0", optional = true }
 tonic_011 = { package = "tonic", version = "0.11.0", optional = true }
 tonic_010 = { package = "tonic", version = "0.10.2", optional = true }
@@ -85,6 +86,9 @@ tonic011 = ["dep:tonic_011"]
 
 ## Enable `tonic(v0.12)::transport::server::Connected` implementation for [`Connection`]
 tonic012 = ["dep:tonic_012", "tokio-vsock?/tonic012"]
+
+## Enable `tonic(v0.12)::transport::server::Connected` implementation for [`Connection`]
+tonic013 = ["dep:tonic_013", "tokio-vsock?/tonic013"]
 
 ## Enable [`tokio_util::net::Listener`] implementation for [`Listener`].
 tokio-util = ["dep:tokio-util"]
