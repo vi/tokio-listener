@@ -127,6 +127,10 @@ mod tonic011;
 #[cfg_attr(docsrs_alt, doc(cfg(feature = "tonic012")))]
 mod tonic012;
 
+#[cfg(feature = "tonic013")]
+#[cfg_attr(docsrs_alt, doc(cfg(feature = "tonic013")))]
+mod tonic013;
+
 #[cfg(feature = "tokio-util")]
 #[cfg_attr(docsrs_alt, doc(cfg(feature = "tokio-util")))]
 mod tokioutil;
