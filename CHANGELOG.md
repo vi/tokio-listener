@@ -1,3 +1,8 @@
+<a name="v0.5.1"></a>
+# v0.5.1
+
+* Add Tonic 0.13 support
+
 <a name="v0.5.0"></a>
 # v0.5.0
 
