@@ -1,12 +1,3 @@
-#[cfg(feature = "tonic010")]
-use tonic_010 as tonic;
-#[cfg(feature = "tonic011")]
-use tonic_011 as tonic;
-#[cfg(feature = "tonic012")]
-use tonic_012 as tonic;
-#[cfg(feature = "tonic013")]
-use tonic_013 as tonic;
-
 use tonic::transport::server::{Connected, TcpConnectInfo};
 
 #[cfg(all(feature = "unix", unix))]
