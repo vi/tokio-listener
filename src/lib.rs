@@ -114,22 +114,9 @@ pub mod axum07;
 #[cfg_attr(docsrs_alt, doc(cfg(feature = "axum08")))]
 mod axum08;
 
-
-#[cfg(feature = "tonic010")]
-#[cfg_attr(docsrs_alt, doc(cfg(feature = "tonic010")))]
-mod tonic010;
-
-#[cfg(feature = "tonic011")]
-#[cfg_attr(docsrs_alt, doc(cfg(feature = "tonic011")))]
-mod tonic011;
-
-#[cfg(feature = "tonic012")]
-#[cfg_attr(docsrs_alt, doc(cfg(feature = "tonic012")))]
-mod tonic012;
-
-#[cfg(feature = "tonic013")]
-#[cfg_attr(docsrs_alt, doc(cfg(feature = "tonic013")))]
-mod tonic013;
+#[cfg(any(feature = "tonic010", feature = "tonic011", feature = "tonic012", feature = "tonic013"))]
+#[cfg_attr(docsrs_alt, doc(cfg(any(feature = "tonic010", feature = "tonic011", feature = "tonic012", feature = "tonic013"))))]
+mod tonic;
 
 #[cfg(feature = "tokio-util")]
 #[cfg_attr(docsrs_alt, doc(cfg(feature = "tokio-util")))]
