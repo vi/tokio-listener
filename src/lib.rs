@@ -142,6 +142,13 @@ mod tonic013 {
     include!("tonic.rs");
 }
 
+#[cfg(feature = "tonic014")]
+#[cfg_attr(docsrs_alt, doc(cfg(feature = "tonic014")))]
+mod tonic014 {
+    use tonic_014 as tonic;
+    include!("tonic.rs");
+}
+
 #[cfg(feature = "tokio-util")]
 #[cfg_attr(docsrs_alt, doc(cfg(feature = "tokio-util")))]
 mod tokioutil;
