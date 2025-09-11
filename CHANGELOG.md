@@ -1,3 +1,8 @@
+<a name="v0.5.2"></a>
+# v0.5.2
+
+* Tonic 0.14 support, refactor Tonic support code
+
 <a name="v0.5.1"></a>
 # v0.5.1
 
